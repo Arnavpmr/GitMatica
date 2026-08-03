@@ -269,7 +269,10 @@ final class LvcMergeWorkflow
                                 "gitmatica.message.lvc_project.task_aborted", "LVC Merge Branch")
                 ),
                 "LVC Merge Branch",
-                LvcOperationJournal.Operation.MERGE
+                LvcOperationJournal.Operation.MERGE,
+                merge.targetBranch(),
+                merge.sourceBranch(),
+                merge.previousHead()
         );
         LvcTaskScheduling.scheduleForWorld(restoreWorld, task);
     }

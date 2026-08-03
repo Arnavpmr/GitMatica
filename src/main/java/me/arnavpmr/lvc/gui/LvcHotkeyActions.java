@@ -7,6 +7,7 @@ import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.config.LvcHotkeys;
 import me.arnavpmr.lvc.model.LvcManifest;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
+import me.arnavpmr.lvc.overlay.LvcTrackingSubRegionSelection;
 import me.arnavpmr.lvc.storage.LvcSemanticRepository;
 
 import fi.dy.masa.litematica.data.DataManager;
@@ -30,18 +31,18 @@ public final class LvcHotkeyActions
             return false;
         }
 
+        if (keybind == LvcHotkeys.OPEN_PROJECT_BROWSER.getKeybind())
+        {
+            GuiBase.openGui(new GuiLvcProjectBrowser());
+            return true;
+        }
+
         SchematicPlacement placement = DataManager.getSchematicPlacementManager().getSelectedSchematicPlacement();
         Path repositoryDirectory = selectedRepositoryDirectory(placement);
 
         if (placement == null || repositoryDirectory == null)
         {
             return false;
-        }
-
-        if (keybind == LvcHotkeys.OPEN_PROJECT_BROWSER.getKeybind())
-        {
-            GuiBase.openGui(new GuiLvcProjectBrowser());
-            return true;
         }
 
         if (keybind == LvcHotkeys.OPEN_PROJECT_MANAGER.getKeybind())
@@ -53,6 +54,28 @@ public final class LvcHotkeyActions
         if (keybind == LvcHotkeys.OPEN_PROJECT_EDITOR.getKeybind())
         {
             LvcSchematicPlacementRowActions.openProjectEditor(placement);
+            return true;
+        }
+
+        if (keybind == LvcHotkeys.CONFIGURE_SUB_REGION.getKeybind())
+        {
+            try
+            {
+                String selectedRegion = LvcTrackingSubRegionSelection.get(repositoryDirectory);
+
+                if (!LvcSubRegionEditorWorkflow.openSelectedSubRegionDialog(
+                        repositoryDirectory, selectedRegion))
+                {
+                    LvcGuiMessages.show(MessageType.ERROR,
+                            "gitmatica.error.lvc_project_editor.select_sub_region");
+                }
+            }
+            catch (Exception e)
+            {
+                LvcGuiMessages.show(MessageType.ERROR,
+                        "gitmatica.error.lvc_project_editor.save_failed", e.getMessage());
+            }
+
             return true;
         }
 

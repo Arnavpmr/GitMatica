@@ -39,7 +39,7 @@ final class LvcIntegrationFixtures
                 "main",
                 "Main",
                 "minecraft:overworld",
-                List.of(new LvcManifest.Region("line", "Line", List.of(0, 0, 0), List.of(sizeX, 1, 1))),
+                List.of(new LvcManifest.Region("Line", List.of(0, 0, 0), List.of(sizeX, 1, 1))),
                 Map.of()
         );
     }
@@ -50,7 +50,7 @@ final class LvcIntegrationFixtures
                 "main",
                 "Main",
                 "minecraft:overworld",
-                List.of(new LvcManifest.Region("line", "Line", List.of(0, 0, 0), List.of(2, 1, 1))),
+                List.of(new LvcManifest.Region("Line", List.of(0, 0, 0), List.of(2, 1, 1))),
                 Map.of()
         );
     }
@@ -58,6 +58,20 @@ final class LvcIntegrationFixtures
     static LvcSitePlacement placementAt(int x, int y, int z)
     {
         return new LvcSitePlacement("minecraft:overworld", List.of(x, y, z));
+    }
+
+    static LvcManifest.Site twoNamedBlockRegions()
+    {
+        return new LvcManifest.Site(
+                "main",
+                "Main",
+                "minecraft:overworld",
+                List.of(
+                        new LvcManifest.Region("Left", List.of(0, 0, 0), List.of(1, 1, 1)),
+                        new LvcManifest.Region("Right", List.of(1, 0, 0), List.of(1, 1, 1))
+                ),
+                Map.of()
+        );
     }
 
     static LvcPlayerIdentity player(String name)

@@ -4,13 +4,11 @@ import me.arnavpmr.lvc.storage.LvcSemanticRepository;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlay;
 import me.arnavpmr.lvc.git.LvcGitTreeReader;
-import me.arnavpmr.lvc.git.LvcGitBranchOps;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Objects;
 import javax.annotation.Nullable;
 import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
@@ -23,6 +21,8 @@ import me.arnavpmr.lvc.model.LvcSitePlacement;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayRevision;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayRevisionResolver;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayRevisionTarget;
+import me.arnavpmr.lvc.overlay.LvcTrackingSubRegionSelection;
+import me.arnavpmr.lvc.overlay.LvcTrackingOverlayManifestResolver;
 import me.arnavpmr.lvc.semantic.LvcSemanticSchematicBuilder;
 import me.arnavpmr.lvc.storage.LvcChunkStore;
 import me.arnavpmr.lvc.storage.LvcRepository;
@@ -33,6 +33,7 @@ import fi.dy.masa.malilib.util.StringUtils;
 
 public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTrackingOverlay>
 {
+    public static final String OPERATION_NAME = "LVC Load Overlay";
     private static final long OVERLAY_BUILD_BUDGET_NANOS = 6_000_000L;
 
     private final Path repositoryDirectory;
@@ -42,6 +43,7 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
     private final boolean startVerifier;
     private final boolean forceRebuild;
     @Nullable private final LvcTrackingOverlayRevision requestedRevision;
+    private final boolean forceWorkingTreeSource;
     @Nullable private LvcTrackingOverlayRevisionTarget revisionTarget;
     @Nullable private LvcManifest manifest;
     @Nullable private LvcSitePlacement placementState;
@@ -55,7 +57,9 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
     @Nullable private Git git;
     @Nullable private RevWalk revWalk;
     @Nullable private RevCommit sourceCommit;
+    @Nullable private String selectedSubRegionName;
     private boolean committedHeadSource;
+    private boolean workingDefinitionSource;
     private boolean yieldAfterStep;
     private Phase phase = Phase.BUILD;
 
@@ -64,7 +68,8 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
                                   boolean startVerifier,
                                   LvcTaskCallbacks<LvcTrackingOverlay> callbacks)
     {
-        this(handle, repositoryDirectory, projectName, clientLevel, completionListener, startVerifier, false, callbacks);
+        this(handle, repositoryDirectory, projectName, clientLevel, completionListener, startVerifier, false,
+                null, false, callbacks);
     }
 
     public LvcSemanticOverlayTask(LvcOperationHandle handle, Path repositoryDirectory, String projectName,
@@ -73,7 +78,7 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
                                   LvcTaskCallbacks<LvcTrackingOverlay> callbacks)
     {
         this(handle, repositoryDirectory, projectName, clientLevel, completionListener, startVerifier, forceRebuild,
-                null, callbacks);
+                null, false, callbacks);
     }
 
     public LvcSemanticOverlayTask(LvcOperationHandle handle, Path repositoryDirectory, String projectName,
@@ -82,16 +87,26 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
                                   LvcTaskCallbacks<LvcTrackingOverlay> callbacks)
     {
         this(handle, repositoryDirectory, projectName, clientLevel, completionListener, startVerifier, true,
-                Objects.requireNonNull(requestedRevision, "requestedRevision"), callbacks);
+                Objects.requireNonNull(requestedRevision, "requestedRevision"), false, callbacks);
+    }
+
+    public static LvcSemanticOverlayTask workingTreeRebuild(
+            LvcOperationHandle handle, Path repositoryDirectory, String projectName,
+            @Nullable ClientLevel clientLevel, @Nullable ICompletionListener completionListener,
+            boolean startVerifier, LvcTaskCallbacks<LvcTrackingOverlay> callbacks)
+    {
+        return new LvcSemanticOverlayTask(handle, repositoryDirectory, projectName, clientLevel,
+                completionListener, startVerifier, true, null, true, callbacks);
     }
 
     private LvcSemanticOverlayTask(LvcOperationHandle handle, Path repositoryDirectory, String projectName,
                                    @Nullable ClientLevel clientLevel, @Nullable ICompletionListener completionListener,
                                    boolean startVerifier, boolean forceRebuild,
                                    @Nullable LvcTrackingOverlayRevision requestedRevision,
+                                   boolean forceWorkingTreeSource,
                                    LvcTaskCallbacks<LvcTrackingOverlay> callbacks)
     {
-        super(handle, "LVC Load Overlay", callbacks, true, OVERLAY_BUILD_BUDGET_NANOS);
+        super(handle, OPERATION_NAME, callbacks, true, OVERLAY_BUILD_BUDGET_NANOS);
         this.repositoryDirectory = Objects.requireNonNull(repositoryDirectory, "repositoryDirectory");
         this.projectName = Objects.requireNonNull(projectName, "projectName");
         this.clientLevel = clientLevel;
@@ -99,6 +114,7 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
         this.startVerifier = startVerifier;
         this.forceRebuild = forceRebuild;
         this.requestedRevision = requestedRevision;
+        this.forceWorkingTreeSource = forceWorkingTreeSource;
     }
 
     public boolean isForRepository(Path repositoryDirectory)
@@ -112,6 +128,7 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
     {
         try
         {
+            this.selectedSubRegionName = LvcTrackingSubRegionSelection.get(this.repositoryDirectory);
             if (this.requestedRevision != null)
             {
                 this.revisionTarget = LvcTrackingOverlayRevisionResolver.resolve(
@@ -121,11 +138,23 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
                         this.revisionTarget.sourceCommitId() : this.revisionTarget.headCommitId();
                 this.manifest = this.readCommittedManifest(sourceCommitId);
             }
+            else if (this.forceWorkingTreeSource)
+            {
+                this.committedHeadSource = false;
+                this.manifest = LvcSemanticRepository.readManifest(this.repositoryDirectory);
+            }
             else
             {
-                this.committedHeadSource = this.shouldUseCommittedHeadSource();
-                this.manifest = this.committedHeadSource ? this.readCommittedManifest(Constants.HEAD) :
-                        LvcSemanticRepository.readManifest(this.repositoryDirectory);
+                LvcTrackingOverlayManifestResolver.Source source =
+                        LvcTrackingOverlayManifestResolver.resolve(this.repositoryDirectory);
+                this.manifest = source.manifest();
+                this.committedHeadSource = source.committedHead();
+                this.workingDefinitionSource = source.workingDefinitions();
+
+                if (source.commitId() != null)
+                {
+                    this.openCommittedSource(source.commitId());
+                }
             }
 
             this.siteId = LvcSemanticRepository.defaultSiteId(this.manifest);
@@ -300,6 +329,8 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
                 );
             }
 
+            this.restoreSelectedSubRegion();
+
             this.phase = Phase.DONE;
             me.arnavpmr.lvc.LvcDiagnostics.debug(this.handle(), "semantic overlay placement added repo='{}' startVerifier={} elapsedMs={}",
                     this.repositoryDirectory, this.startVerifier, elapsedMillis(started));
@@ -390,13 +421,13 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
         return Objects.requireNonNull(this.overlayName, "overlayName");
     }
 
-    private boolean shouldUseCommittedHeadSource() throws Exception
+    private LvcManifest readCommittedManifest(String commitId) throws Exception
     {
-        return LvcGitBranchOps.hasUncommittedChanges(this.repositoryDirectory) &&
-                LvcRepository.resolveHead(this.repositoryDirectory) != null;
+        this.openCommittedSource(commitId);
+        return LvcSemanticRepository.readCommitManifest(this.requireRepository(), this.requireSourceCommit());
     }
 
-    private LvcManifest readCommittedManifest(String commitId) throws Exception
+    private void openCommittedSource(String commitId) throws Exception
     {
         if (this.git == null)
         {
@@ -406,7 +437,6 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
         Repository repository = this.git.getRepository();
         this.revWalk = new RevWalk(repository);
         this.sourceCommit = LvcGitTreeReader.resolveCommit(repository, this.revWalk, commitId);
-        return LvcSemanticRepository.readCommitManifest(repository, this.sourceCommit);
     }
 
     private LvcTrackingOverlayRevisionTarget requireRevisionTarget()
@@ -422,7 +452,27 @@ public final class LvcSemanticOverlayTask extends LvcChunkedTaskBase<LvcTracking
                     this.requestedRevision == LvcTrackingOverlayRevision.CURRENT ? "current-commit" : "parent-commit";
         }
 
+        if (this.workingDefinitionSource)
+        {
+            return "working-definitions+committed-content";
+        }
+
         return this.committedHeadSource ? "committed-head" : "working-tree";
+    }
+
+    private void restoreSelectedSubRegion()
+    {
+        String selected = this.selectedSubRegionName;
+
+        if (selected != null && this.requireManifest().site(this.requireSiteId()).regions().stream()
+                .anyMatch(region -> region.name().equals(selected)))
+        {
+            LvcTrackingSubRegionSelection.set(this.repositoryDirectory, selected);
+        }
+        else
+        {
+            LvcTrackingSubRegionSelection.set(this.repositoryDirectory, null);
+        }
     }
 
     private void validateRevisionHead() throws IOException

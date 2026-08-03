@@ -1,8 +1,6 @@
 package me.arnavpmr.lvc.overlay;
 
 import me.arnavpmr.lvc.storage.LvcSemanticRepository;
-import me.arnavpmr.lvc.git.LvcGitTreeReader;
-import me.arnavpmr.lvc.git.LvcGitBranchOps;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
@@ -13,11 +11,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import javax.annotation.Nullable;
-import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
-import org.eclipse.jgit.lib.Repository;
-import org.eclipse.jgit.revwalk.RevCommit;
-import org.eclipse.jgit.revwalk.RevWalk;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
@@ -122,6 +116,7 @@ public final class LvcTrackingOverlayService
     public static void closeTrackingOverlay(Path repositoryDirectory)
     {
         removeTrackingOverlay(repositoryDirectory, false);
+        LvcTrackingSubRegionSelection.clear(repositoryDirectory);
     }
 
     private static void removeTrackingOverlay(Path repositoryDirectory, boolean preserveOriginCache)
@@ -174,14 +169,9 @@ public final class LvcTrackingOverlayService
     {
         Objects.requireNonNull(repositoryDirectory, "repositoryDirectory");
 
-        if (hasTrackedGitChanges(repositoryDirectory))
-        {
-            LvcDiagnostics.debug("LvcTrackingOverlayService: refused reusable overlay for dirty repository '{}'", repositoryDirectory);
-            return null;
-        }
-
         Path key = trackingOverlayKey(repositoryDirectory);
         LvcManifest manifest = LvcSemanticRepository.readManifest(repositoryDirectory);
+
         String siteId = LvcSemanticRepository.defaultSiteId(manifest);
         LvcManifest.Site site = manifest.site(siteId);
 
@@ -348,6 +338,12 @@ public final class LvcTrackingOverlayService
         long manifestTime = Files.getLastModifiedTime(repositoryDirectory.resolve(LvcSemanticRepository.MANIFEST)).toMillis();
         LvcManifest manifest = LvcSemanticRepository.readManifest(repositoryDirectory);
 
+        if (!Objects.equals(descriptor.definitionId(),
+                LvcSemanticRepository.trackingOverlayDefinitionId(manifest)))
+        {
+            return false;
+        }
+
         if (!trackingOverlayDisplayNameForCommit(manifest.name(), head.getName()).equals(descriptor.overlayName()))
         {
             return false;
@@ -446,8 +442,8 @@ public final class LvcTrackingOverlayService
     {
         Objects.requireNonNull(revision, "revision");
         Objects.requireNonNull(descriptorCommitId, "descriptorCommitId");
-        LvcTrackingOverlayDescriptor descriptor = overlayDescriptor(descriptorCommitId, siteId, placementState.dimension(),
-                schematic.getFile(), overlayName, revision);
+        LvcTrackingOverlayDescriptor descriptor = overlayDescriptor(descriptorCommitId, null, siteId,
+                placementState.dimension(), schematic.getFile(), overlayName, revision);
         return addSemanticTrackingOverlay(repositoryDirectory, schematic, siteId, placementState, overlayName,
                 clientLevel, completionListener, startVerifier, descriptor);
     }
@@ -682,20 +678,6 @@ public final class LvcTrackingOverlayService
         Path gitDirectory = cacheDirectory != null ? cacheDirectory.getParent() : null;
         Path repositoryDirectory = gitDirectory != null ? gitDirectory.getParent() : null;
         return repositoryDirectory != null ? repositoryDirectory.normalize() : null;
-    }
-
-    private static boolean hasTrackedGitChanges(Path repositoryDirectory)
-    {
-        try
-        {
-            return LvcGitBranchOps.hasUncommittedChanges(repositoryDirectory);
-        }
-        catch (Exception e)
-        {
-            LvcDiagnostics.debug("LvcTrackingOverlayService: treating overlay cache as non-reusable because dirty check failed repo='{}' error='{}'",
-                    repositoryDirectory, e.getMessage());
-            return true;
-        }
     }
 
     public static boolean focusTrackingOverlay(Path repositoryDirectory)
@@ -1239,7 +1221,7 @@ public final class LvcTrackingOverlayService
         }
 
         String commitId = head.getName();
-        LvcManifest manifest = readCommitManifest(repositoryDirectory, commitId);
+        LvcManifest manifest = LvcTrackingOverlayManifestResolver.resolve(repositoryDirectory).manifest();
         String siteId = LvcSemanticRepository.defaultSiteId(manifest);
         LvcManifest.Site site = manifest.site(siteId);
         String overlayName = trackingOverlayDisplayNameForCommit(manifest.name(), commitId);
@@ -1261,17 +1243,6 @@ public final class LvcTrackingOverlayService
         LvcTrackingOverlayDescriptor descriptor = currentOverlayDescriptor(repositoryDirectory, siteId, dimension, cacheFile, overlayName);
         return new OverlayTarget(repositoryDirectory.toAbsolutePath().normalize(), commitId, siteId, dimension,
                 cacheFile, overlayName, descriptor);
-    }
-
-    private static LvcManifest readCommitManifest(Path repositoryDirectory, String commitId) throws IOException
-    {
-        try (Git git = Git.open(repositoryDirectory.toFile());
-             RevWalk revWalk = new RevWalk(git.getRepository()))
-        {
-            Repository repository = git.getRepository();
-            RevCommit commit = LvcGitTreeReader.resolveCommit(repository, revWalk, commitId);
-            return LvcSemanticRepository.readCommitManifest(repository, commit);
-        }
     }
 
     private static String trackingOverlayDisplayNameForCommit(String projectName, String commitId)
@@ -1302,12 +1273,16 @@ public final class LvcTrackingOverlayService
             return null;
         }
 
-        return overlayDescriptor(head.getName(), siteId, dimension, cacheFile, overlayName,
-                LvcTrackingOverlayRevision.CURRENT);
+        LvcManifest manifest = LvcSemanticRepository.readManifest(repositoryDirectory);
+        return overlayDescriptor(head.getName(),
+                LvcSemanticRepository.trackingOverlayDefinitionId(manifest), siteId, dimension,
+                cacheFile, overlayName, LvcTrackingOverlayRevision.CURRENT);
     }
 
     @Nullable
-    private static LvcTrackingOverlayDescriptor overlayDescriptor(String commitId, String siteId, String dimension,
+    private static LvcTrackingOverlayDescriptor overlayDescriptor(String commitId,
+                                                       @Nullable String definitionId,
+                                                       String siteId, String dimension,
                                                        @Nullable Path cacheFile, String overlayName,
                                                        LvcTrackingOverlayRevision revision)
     {
@@ -1316,7 +1291,7 @@ public final class LvcTrackingOverlayService
             return null;
         }
 
-        return new LvcTrackingOverlayDescriptor(commitId, siteId, dimension,
+        return new LvcTrackingOverlayDescriptor(commitId, definitionId, siteId, dimension,
                 cacheFile.toAbsolutePath().normalize().toString(), overlayName, revision.serializedName());
     }
 
@@ -1574,6 +1549,7 @@ public final class LvcTrackingOverlayService
     {
         return descriptor.matches(
                 target.commitId(),
+                target.descriptor().definitionId(),
                 target.siteId(),
                 target.dimension(),
                 target.cacheFile(),

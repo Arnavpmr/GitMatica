@@ -45,7 +45,6 @@ final class GuiLvcProjectController
 {
     private static final int COMMIT_DESCRIPTION_DISPLAY_LINES = 4;
     private static final int COMMIT_DESCRIPTION_MAX_LINES = 8;
-    private static final String LOAD_OVERLAY_OPERATION = "LVC Load Overlay";
     private static final String SEMANTIC_CHECKOUT_UNSUPPORTED_KEY = "gitmatica.error.lvc_project.semantic_checkout_restore_unimplemented";
     private static final String SEMANTIC_PULL_UNSUPPORTED_KEY = "gitmatica.error.lvc_project.semantic_pull_restore_unimplemented";
 
@@ -1024,7 +1023,7 @@ final class GuiLvcProjectController
             return;
         }
 
-        Optional<LvcOperationHandle> handle = LvcTaskRegistry.tryAcquireBackground(LOAD_OVERLAY_OPERATION, this.gui.repositoryDirectory);
+        Optional<LvcOperationHandle> handle = LvcTaskRegistry.tryAcquireBackground(LvcSemanticOverlayTask.OPERATION_NAME, this.gui.repositoryDirectory);
 
         if (handle.isEmpty())
         {
@@ -1075,7 +1074,7 @@ final class GuiLvcProjectController
 
     private boolean isOverlayLoadActiveForThisRepo()
     {
-        return LvcTaskRegistry.hasActiveBackgroundOperation(LOAD_OVERLAY_OPERATION, this.gui.repositoryDirectory);
+        return LvcTaskRegistry.hasActiveBackgroundOperation(LvcSemanticOverlayTask.OPERATION_NAME, this.gui.repositoryDirectory);
     }
 
     private void clearRefreshMarkerAfterOverlay()

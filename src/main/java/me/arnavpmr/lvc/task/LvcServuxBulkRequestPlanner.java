@@ -12,6 +12,7 @@ import net.minecraft.world.level.ChunkPos;
 import fi.dy.masa.litematica.data.EntityDataManager;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.capture.LvcCaptureSession;
+import me.arnavpmr.lvc.capture.LvcRetiredCoveragePlan;
 import me.arnavpmr.lvc.capture.LvcSiteWorkPlan;
 import me.arnavpmr.lvc.capture.LvcServuxBulkEntityCache;
 import me.arnavpmr.lvc.model.LvcChunk;
@@ -33,9 +34,15 @@ final class LvcServuxBulkRequestPlanner
 
     private LvcServuxBulkRequestPlanner(LvcSiteWorkPlan plan)
     {
-        this.origin = plan.origin();
+        this(plan.origin(), plan.chunks());
+    }
 
-        for (LvcSiteWorkPlan.ChunkWork work : plan.chunks())
+    private LvcServuxBulkRequestPlanner(LvcIntPosition origin,
+                                        List<LvcSiteWorkPlan.ChunkWork> chunks)
+    {
+        this.origin = Objects.requireNonNull(origin, "origin");
+
+        for (LvcSiteWorkPlan.ChunkWork work : chunks)
         {
             int minY = this.chunkMinY(work.coordinate());
             int maxY = minY + LvcChunk.DEFAULT_SIZE - 1;
@@ -55,6 +62,18 @@ final class LvcServuxBulkRequestPlanner
     static LvcServuxBulkRequestPlanner create(LvcSiteWorkPlan plan)
     {
         return new LvcServuxBulkRequestPlanner(Objects.requireNonNull(plan, "plan"));
+    }
+
+    static LvcServuxBulkRequestPlanner create(LvcSiteWorkPlan plan,
+                                              LvcRetiredCoveragePlan retiredCoverage)
+    {
+        Objects.requireNonNull(plan, "plan");
+        Objects.requireNonNull(retiredCoverage, "retiredCoverage");
+        List<LvcSiteWorkPlan.ChunkWork> chunks = new ArrayList<>(
+                plan.chunks().size() + retiredCoverage.chunks().size());
+        chunks.addAll(plan.chunks());
+        chunks.addAll(retiredCoverage.chunks());
+        return new LvcServuxBulkRequestPlanner(plan.origin(), chunks);
     }
 
     int totalColumns()

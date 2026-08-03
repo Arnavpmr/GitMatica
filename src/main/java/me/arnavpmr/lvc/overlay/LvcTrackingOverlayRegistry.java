@@ -10,6 +10,7 @@ final class LvcTrackingOverlayRegistry
 {
     private static final Map<Path, LvcTrackingOverlayEntry> ENTRIES = new HashMap<>();
     private static final Map<Path, BlockPos> ORIGINS = new HashMap<>();
+    private static final Map<Path, String> SELECTED_SUB_REGIONS = new HashMap<>();
 
     private LvcTrackingOverlayRegistry()
     {
@@ -46,6 +47,31 @@ final class LvcTrackingOverlayRegistry
     static void removeOrigin(Path repositoryDirectory)
     {
         ORIGINS.remove(key(repositoryDirectory));
+    }
+
+    @Nullable
+    static String selectedSubRegion(Path repositoryDirectory)
+    {
+        return SELECTED_SUB_REGIONS.get(key(repositoryDirectory));
+    }
+
+    static void putSelectedSubRegion(Path repositoryDirectory, @Nullable String regionName)
+    {
+        Path key = key(repositoryDirectory);
+
+        if (regionName == null)
+        {
+            SELECTED_SUB_REGIONS.remove(key);
+        }
+        else
+        {
+            SELECTED_SUB_REGIONS.put(key, regionName);
+        }
+    }
+
+    static void removeSelectedSubRegion(Path repositoryDirectory)
+    {
+        SELECTED_SUB_REGIONS.remove(key(repositoryDirectory));
     }
 
     static Path key(Path repositoryDirectory)

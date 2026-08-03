@@ -219,6 +219,40 @@ public final class LvcSemanticRepository
         return hydrated;
     }
 
+    public static boolean sameRegionDefinitions(LvcManifest first, LvcManifest second)
+    {
+        Objects.requireNonNull(first, "first");
+        Objects.requireNonNull(second, "second");
+
+        if (first.sites().size() != second.sites().size())
+        {
+            return false;
+        }
+
+        Map<String, List<LvcManifest.Region>> secondRegionsBySite = new HashMap<>();
+
+        for (LvcManifest.Site site : second.sites())
+        {
+            secondRegionsBySite.put(site.id(), site.regions());
+        }
+
+        for (LvcManifest.Site site : first.sites())
+        {
+            if (!site.regions().equals(secondRegionsBySite.get(site.id())))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public static String trackingOverlayDefinitionId(LvcManifest manifest)
+    {
+        Objects.requireNonNull(manifest, "manifest");
+        return LvcChunkStore.objectId(LvcManifestJsonCodec.encode(manifest).getBytes(StandardCharsets.UTF_8));
+    }
+
     public static LvcManifest readCommitManifest(Repository repository, RevCommit commit) throws IOException
     {
         Objects.requireNonNull(repository, "repository");

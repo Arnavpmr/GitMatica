@@ -5,13 +5,16 @@ import java.util.Objects;
 import javax.annotation.Nullable;
 import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
 
-record LvcTrackingOverlayDescriptor(String commitId, String siteId, String dimension,
+record LvcTrackingOverlayDescriptor(String commitId, @Nullable String definitionId,
+                                    String siteId, String dimension,
                                     String cacheFile, String overlayName, @Nullable String revision)
 {
-    boolean matches(String commitId, String siteId, String dimension, Path cacheFile, String overlayName)
+    boolean matches(String commitId, @Nullable String definitionId, String siteId,
+                    String dimension, Path cacheFile, String overlayName)
     {
         Path descriptorCacheFile = this.cacheFilePath();
         return Objects.equals(this.commitId, commitId) &&
+                Objects.equals(this.definitionId, definitionId) &&
                 Objects.equals(this.siteId, siteId) &&
                 Objects.equals(this.dimension, dimension) &&
                 descriptorCacheFile != null &&

@@ -187,7 +187,7 @@
   "gitmatica.gui.label.lvc_project.task_chunks": "子區塊：%s / %s",
   "gitmatica.gui.label.lvc_project.task_objects": "物件：%s / %s",
   "gitmatica.gui.label.lvc_project.task_phase": "階段：%s",
-  "gitmatica.gui.message.lvc_project.merge_conflict_choose": "發現合併衝突。請選擇一個來源來解決所有衝突。",
+  "gitmatica.gui.message.lvc_project.merge_conflict_choose": "發現子區域或方塊衝突。請選擇一個來源來解決所有衝突。",
   "gitmatica.gui.message.lvc_project.recovery_required": "有一個中斷的操作待處理。執行其他操作前，請重啟或中止它。",
   "gitmatica.gui.message.lvc_project.recovery_restart_action": "重啟會清理舊復原資料，並再次執行該操作。",
   "gitmatica.gui.message.lvc_project.recovery_abort_action": "中止會清理舊復原資料，但不會執行該操作。",
@@ -353,5 +353,14 @@
   "gitmatica.gui.message.lvc_project_manager.confirm_delete_project": "是否從磁碟刪除專案「%s」？\n這會刪除本地Git儲存庫，無法從 Gitmatica 撤銷。",
   "gitmatica.gui.message.lvc_project_editor.confirm_delete_region": "是否從 Gitmatica 專案中刪除子區域「%s」？\n這會修改版本化專案元資料，並在儲存版本時提交。",
   "gitmatica.gui.message.lvc_project.detached_head_commit": "檢出提交後 HEAD 處於 detached 狀態，Gitmatica 無法安全提交。是否檢出 %s 並在該分支上繼續提交？",
+  "gitmatica.config.hotkeys.comment.configureSubRegion": "開啟所選 Gitmatica 專案中目前所選子區域的\n設定子區域對話框",
+  "gitmatica.config.hotkeys.name.configureSubRegion": "configureSubRegion",
+  "gitmatica.gui.title.lvc_project_editor.configure_sub_region": "設定子區域：%s",
+  "gitmatica.gui.label.lvc_project_editor.region_x1": "X1",
+  "gitmatica.gui.label.lvc_project_editor.region_x2": "X2",
+  "gitmatica.error.lvc_project_editor.region_name_duplicate": "名為「%s」的子區域已存在。",
+  "gitmatica.error.lvc_project_editor.region_required": "專案必須至少保留一個子區域。",
+  "gitmatica.error.lvc_project_editor.region_size_positive": "子區域尺寸必須大於零。",
+  "gitmatica.error.lvc_project_editor.select_sub_region": "請先選擇一個子區域，再開啟其設定。",
   "modmenu.descriptionTranslation.gitmatica": "Gitmatica 为 Litematica 项目提供 Git 版本控制。"
 }

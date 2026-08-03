@@ -241,7 +241,7 @@ final class LvcSemanticRepositoryLifecycleIntegrationTest
         LvcSemanticRepository.CommitResult init = LvcSemanticRepository.initProject(repoDir, "Semantic Areas", singleLineSite(1), placementAt(0, 0, 0), reader, player("SemanticAreas"));
         ObjectId initHead = LvcRepository.resolveHead(repoDir);
 
-        List<LvcManifest.Region> expandedRegions = List.of(new LvcManifest.Region("line", "Line", List.of(0, 0, 0), List.of(17, 1, 1)));
+        List<LvcManifest.Region> expandedRegions = List.of(new LvcManifest.Region("Line", List.of(0, 0, 0), List.of(17, 1, 1)));
         reader.setBlock(new LvcIntPosition(16, 0, 0), "minecraft:dirt");
         LvcSemanticRepository.CommitResult expanded = LvcSemanticRepository.updateSiteAreas(repoDir, init.manifest(), "main", placementAt(0, 0, 0), expandedRegions, reader, player("SemanticAreas"), "expand area");
 
@@ -253,7 +253,7 @@ final class LvcSemanticRepositoryLifecycleIntegrationTest
         String removedAreaObject = expanded.manifest().site("main").fullHashes().get("1,0,0");
         IntegrationTestSupport.assertTrue(!removedAreaObject.equals(expanded.manifest().site("main").fullHashes().get("0,0,0")), "removed chunk object should be unique for prune assertion");
 
-        List<LvcManifest.Region> shrunkRegions = List.of(new LvcManifest.Region("line", "Line", List.of(0, 0, 0), List.of(1, 1, 1)));
+        List<LvcManifest.Region> shrunkRegions = List.of(new LvcManifest.Region("Line", List.of(0, 0, 0), List.of(1, 1, 1)));
         LvcSemanticRepository.CommitResult shrunk = LvcSemanticRepository.updateSiteAreas(repoDir, expanded.manifest(), "main", placementAt(0, 0, 0), shrunkRegions, reader, player("SemanticAreas"), "shrink area");
 
         IntegrationTestSupport.assertNotNull(shrunk.commit(), "shrunk area should create a commit");

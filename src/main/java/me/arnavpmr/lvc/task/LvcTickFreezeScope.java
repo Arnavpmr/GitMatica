@@ -149,7 +149,7 @@ final class LvcTickFreezeScope implements AutoCloseable
         }
         catch (ArithmeticException e)
         {
-            throw new IOException("LVC tracking bounds overflow for region " + region.id(), e);
+            throw new IOException("LVC tracking bounds overflow for region " + region.name(), e);
         }
     }
 }

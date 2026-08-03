@@ -17,8 +17,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import javax.annotation.Nullable;
 import io.netty.buffer.Unpooled;
-import it.unimi.dsi.fastutil.longs.LongIterator;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.Constants;
 import org.eclipse.jgit.lib.ObjectId;
@@ -32,7 +30,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.commands.arguments.blocks.BlockStateParser;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
-import net.minecraft.core.Vec3i;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -41,7 +38,6 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.server.permissions.Permissions;
 import net.minecraft.util.Util;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import fi.dy.masa.malilib.gui.GuiBase;
@@ -56,16 +52,16 @@ import fi.dy.masa.litematica.network.ServuxLitematicaHandler;
 import fi.dy.masa.litematica.scheduler.TaskScheduler;
 import fi.dy.masa.litematica.schematic.LitematicaSchematic;
 import fi.dy.masa.litematica.schematic.LitematicaSchematic.EntityInfo;
-import fi.dy.masa.litematica.schematic.container.LitematicaBlockStateContainer;
 import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
 import fi.dy.masa.litematica.util.PasteLayerBehavior;
 import fi.dy.masa.litematica.util.ReplaceBehavior;
-import fi.dy.masa.litematica.util.SchematicWorldRefresher;
 import fi.dy.masa.litematica.util.ToBooleanFunction;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.capture.LvcSiteWorkPlan;
+import me.arnavpmr.lvc.capture.LvcRetiredCoveragePlan;
 import me.arnavpmr.lvc.capture.LvcWorldReader;
 import me.arnavpmr.lvc.model.LvcChunk;
+import me.arnavpmr.lvc.model.LvcIntPosition;
 import me.arnavpmr.lvc.model.LvcManifest;
 import me.arnavpmr.lvc.model.LvcSitePlacement;
 import me.arnavpmr.lvc.project.LvcProjectPositions;
@@ -82,9 +78,7 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     private static final int VOID_ENTITY_CLEANUP_VERTICAL_RADIUS = 16;
     private static final int SERVUX_PACKET_SLICES_PER_TICK = 32;
     private static final long SERVUX_PACKET_SEND_BUDGET_NANOS = 2_000_000L;
-    private static final long SERVUX_CLIENT_SYNC_BUDGET_NANOS = 4_000_000L;
     private static final long COMMAND_FEEDBACK_PROBE_TIMEOUT_NANOS = 2_000_000_000L;
-    private static final int CLIENT_SHADOW_SET_FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
     private final Path repositoryDirectory;
     private final Level world;
@@ -100,6 +94,7 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     @Nullable private String siteId;
     @Nullable private LvcSitePlacement placement;
     @Nullable private LvcSiteWorkPlan cleanupPlan;
+    private LvcRetiredCoveragePlan retiredCoveragePlan = LvcRetiredCoveragePlan.empty();
     @Nullable private BlockPos origin;
     @Nullable private Result result;
     @Nullable private LvcCommandPasteConfigScope commandConfigScope;
@@ -110,7 +105,7 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     @Nullable private LvcServuxBulkRequestPlanner servuxRequests;
     @Nullable private CompletableFuture<ServuxPastePayload> servuxPastePayloadFuture;
     @Nullable private ServuxPastePayload servuxPastePayload;
-    @Nullable private ClientSchematicShadowSync clientShadowSync;
+    @Nullable private LvcClientSchematicShadowSync clientShadowSync;
     @Nullable private String previousHead;
     @Nullable private String previousBranch;
     private Phase phase = Phase.BUILD;
@@ -120,10 +115,14 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     private boolean commandPasteSucceeded;
     private boolean journalWritten;
     private boolean gitMoved;
+    private boolean regionDefinitionsChanged;
     private boolean entityCleanupPrepared;
     private int furnaceXpCleanupChunkIndex;
     private int furnaceXpCleanupCommandsPrepared;
     private int commandReadableValidationBlocks;
+    private int retiredScanChunkIndex;
+    private boolean retiredCoverageCommandsPrepared;
+    private int retiredCoverageCommands;
     private final Deque<String> cleanupCommandQueue = new ArrayDeque<>();
     private final Deque<String> commandMutationQueue = new ArrayDeque<>();
     private final ToBooleanFunction<Component> commandFeedbackListener = this::checkCommandMutationFeedbackGameRuleState;
@@ -258,13 +257,18 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                 this.revWalk = new RevWalk(repository);
                 this.capturePreviousHead(repository);
                 this.targetCommit = this.resolveTargetCommit(repository);
+                LvcManifest workingManifest = this.request.mode() == Mode.DISCARD ?
+                        LvcSemanticRepository.readManifest(this.repositoryDirectory) : null;
                 this.manifest = LvcSemanticRepository.readCommitManifest(repository, this.targetCommit);
+                this.regionDefinitionsChanged = workingManifest != null &&
+                        !LvcSemanticRepository.sameRegionDefinitions(workingManifest, this.manifest);
                 this.siteId = LvcSemanticRepository.defaultSiteId(this.manifest);
+                this.retiredCoveragePlan = this.createRetiredCoveragePlan(repository);
                 this.preparePlacementState();
                 LvcSiteWorkPlan sparsePlan = this.shouldBuildSparseTargetSchematic() ?
                         LvcSiteWorkPlan.create(this.requireManifest().site(this.requireSiteId()), this.requirePlacement()) : null;
                 this.servuxRequests = sparsePlan != null && this.requireBackend() == LvcWorldBackend.SERVUX ?
-                        LvcServuxBulkRequestPlanner.create(sparsePlan) : null;
+                        LvcServuxBulkRequestPlanner.create(sparsePlan, this.retiredCoveragePlan) : null;
                 this.sparseTargetReader = sparsePlan == null ? null :
                         this.requireBackend().createReader(this.world, this.requireBackend() == LvcWorldBackend.SERVUX);
                 this.sparseTargetPlanner = this.sparseTargetReader == null ? null :
@@ -278,15 +282,16 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                         null,
                         this.sparseTargetPlanner == null ? null : this.sparseTargetPlanner::include
                 );
-                this.phase = this.servuxRequests == null ? Phase.BUILD : Phase.REQUEST_SERVUX_DATA;
+                this.phase = this.servuxRequests == null ? this.phaseBeforeBuild() : Phase.REQUEST_SERVUX_DATA;
             }
 
             LvcDiagnostics.debug(this.handle(),
-                    "remote server apply initialized mode={} backend={} lossy={} site={} target={} branch='{}' regions={} chunks={} dimension={} origin={} sparseTarget={} servuxColumns={}",
+                    "remote server apply initialized mode={} backend={} lossy={} site={} target={} branch='{}' regions={} chunks={} retiredChunks={} retiredBlocks={} dimension={} origin={} sparseTarget={} servuxColumns={}",
                     this.request.mode().name(), this.backend.id(), this.backend.lossy(), this.siteId,
                     this.targetCommit == null ? "<none>" : this.targetCommit.getName(),
                     this.request.targetBranchName() == null ? "<none>" : this.request.targetBranchName(),
                     this.regionCount, this.buildSession == null ? 0 : this.buildSession.totalChunks(),
+                    this.retiredCoveragePlan.chunkCount(), this.retiredCoveragePlan.blockCount(),
                     this.requirePlacement().dimension(), this.requirePlacement().origin(),
                     this.sparseTargetReader != null, this.servuxRequests == null ? 0 : this.servuxRequests.totalColumns());
             this.updateProgressHud();
@@ -309,6 +314,27 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                 return false;
             }
 
+            this.phase = this.phaseBeforeBuild();
+            return false;
+        }
+
+        if (this.phase == Phase.SCAN_RETIRED_COVERAGE)
+        {
+            if (this.retiredScanChunkIndex < this.retiredCoveragePlan.chunks().size())
+            {
+                LvcSiteWorkPlan.ChunkWork work = this.retiredCoveragePlan.chunks().get(
+                        this.retiredScanChunkIndex++);
+                Objects.requireNonNull(this.sparseTargetPlanner, "sparseTargetPlanner")
+                        .scanRetiredCoverageChunk(work, this.requirePlacementOrigin());
+                return false;
+            }
+
+            LvcRemoteSparseTargetPlanner planner = Objects.requireNonNull(
+                    this.sparseTargetPlanner, "sparseTargetPlanner");
+            LvcDiagnostics.debug(this.handle(),
+                    "remote server apply retired coverage scan complete chunks={} blocks={} nonAirBlocks={} affectedChunks={}",
+                    this.retiredCoveragePlan.chunkCount(), planner.scannedRetiredBlocks(),
+                    planner.retiredNonAirBlocks(), planner.retiredNonAirChunks().size());
             this.phase = Phase.BUILD;
             return false;
         }
@@ -333,7 +359,7 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                     sparsePlanner == null ? 0 : sparsePlanner.stateMismatches(),
                     sparsePlanner == null ? 0 : sparsePlanner.blockEntityMismatches(),
                     sparsePlanner == null ? 0 : sparsePlanner.ignoredBlockEntityTargets(),
-                    sparsePlanner == null ? 0 : sparsePlanner.affectedRegionIds().size());
+                    sparsePlanner == null ? 0 : sparsePlanner.affectedRegionNames().size());
             this.phase = Phase.PREPARE_SERVUX_PAYLOAD;
             return false;
         }
@@ -383,6 +409,24 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                 LvcDiagnostics.debug(this.handle(), "remote server apply furnace XP cleanup complete source={} workUnits={} commands={}",
                         this.furnaceXpCleanupSource(),
                         this.furnaceXpCleanupWorkUnits(), this.furnaceXpCleanupCommandsPrepared);
+                this.phase = Phase.CLEAR_RETIRED_COVERAGE;
+            }
+
+            return false;
+        }
+
+        if (this.phase == Phase.CLEAR_RETIRED_COVERAGE)
+        {
+            this.prepareRetiredCoverageCommands();
+
+            if (this.sendQueuedCleanupCommands())
+            {
+                LvcDiagnostics.debug(this.handle(),
+                        "remote server apply retired coverage clear dispatched retiredBlocks={} nonAirBlocks={} affectedChunks={} commands={}",
+                        this.retiredCoveragePlan.blockCount(),
+                        this.sparseTargetPlanner == null ? 0 : this.sparseTargetPlanner.retiredNonAirBlocks(),
+                        this.sparseTargetPlanner == null ? 0 : this.sparseTargetPlanner.retiredNonAirChunks().size(),
+                        this.retiredCoverageCommands);
                 this.phase = Phase.SEND_PASTE;
             }
 
@@ -442,6 +486,7 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     protected boolean shouldContinueWithinTick()
     {
         return this.phase == Phase.BUILD ||
+                this.phase == Phase.SCAN_RETIRED_COVERAGE ||
                 (this.phase == Phase.CLEAR_FURNACE_XP && this.cleanupCommandQueue.isEmpty());
     }
 
@@ -519,6 +564,12 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
             this.infoHudLines.add(String.format(Locale.ROOT, "Servux columns: %d / %d",
                     this.servuxRequests.completedColumns(), this.servuxRequests.totalColumns()));
         }
+        else if (this.phase == Phase.SCAN_RETIRED_COVERAGE)
+        {
+            this.infoHudLines.add(String.format(Locale.ROOT, "Retired chunks: %d / %d",
+                    Math.min(this.retiredScanChunkIndex, this.retiredCoveragePlan.chunkCount()),
+                    this.retiredCoveragePlan.chunkCount()));
+        }
         else if (this.phase == Phase.BUILD && this.buildSession != null)
         {
             this.infoHudLines.add(String.format(Locale.ROOT, "Chunks: %d / %d",
@@ -533,6 +584,11 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                 this.cleanupCommandQueue.isEmpty() == false)
         {
             this.infoHudLines.add(String.format(Locale.ROOT, "Cleanup commands: %d",
+                    this.cleanupCommandQueue.size()));
+        }
+        else if (this.phase == Phase.CLEAR_RETIRED_COVERAGE)
+        {
+            this.infoHudLines.add(String.format(Locale.ROOT, "Retired clear commands: %d",
                     this.cleanupCommandQueue.size()));
         }
         else if (this.phase == Phase.CLEAR_FURNACE_XP && this.cleanupPlan != null)
@@ -617,6 +673,33 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     private boolean shouldBuildSparseTargetSchematic()
     {
         return this.request.mode() != Mode.CLEAR;
+    }
+
+    private Phase phaseBeforeBuild()
+    {
+        return this.retiredCoveragePlan.isEmpty() ? Phase.BUILD : Phase.SCAN_RETIRED_COVERAGE;
+    }
+
+    private LvcRetiredCoveragePlan createRetiredCoveragePlan(Repository repository) throws Exception
+    {
+        String sourceCommitId = switch (this.request.mode())
+        {
+            case CHECKOUT, CHECKOUT_BRANCH, DELETE_VERSION -> this.previousHead;
+            case MERGE -> this.request.mergePreviousHead();
+            case DISCARD, CLEAR -> null;
+        };
+
+        if (sourceCommitId == null)
+        {
+            return LvcRetiredCoveragePlan.empty();
+        }
+
+        RevCommit sourceCommit = LvcGitTreeReader.resolveCommit(
+                repository, Objects.requireNonNull(this.revWalk, "revWalk"), sourceCommitId);
+        LvcManifest sourceManifest = LvcSemanticRepository.readCommitManifest(repository, sourceCommit);
+        return LvcRetiredCoveragePlan.between(
+                sourceManifest.site(this.requireSiteId()),
+                this.requireManifest().site(this.requireSiteId()));
     }
 
     private int sparseSkippedBlocks()
@@ -782,7 +865,8 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
         LvcRefreshMarker.write(this.repositoryDirectory, this.request.mode().journalPhase, this.targetCommitName());
         LvcOperationJournal.delete(this.repositoryDirectory);
         this.result = new Result(this.request.mode(), this.requireBackend(), this.regionCount,
-                this.requireBackend().lossy(), this.commandPasteScheduled);
+                this.requireBackend().lossy(), this.commandPasteScheduled,
+                this.regionDefinitionsChanged);
         LvcDiagnostics.debug(this.handle(), "remote server apply complete mode={} backend={} lossy={} commandScheduled={} regions={} target={}",
                 this.request.mode().name(), this.requireBackend().id(), this.requireBackend().lossy(),
                 this.commandPasteScheduled, this.regionCount, this.targetCommitName());
@@ -954,15 +1038,16 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
 
         if (this.clientShadowSync == null)
         {
-            this.clientShadowSync = new ClientSchematicShadowSync(clientLevel,
-                    Objects.requireNonNull(this.schematic, "schematic"), this.requireOrigin());
+            this.clientShadowSync = new LvcClientSchematicShadowSync(clientLevel,
+                    Objects.requireNonNull(this.schematic, "schematic"), this.requireOrigin(),
+                    this.retiredCoveragePlan);
             LvcDiagnostics.debug(this.handle(),
                     "remote Servux client shadow sync started mode={} regions={} target={} regionsInSchematic={} volume={}",
                     this.request.mode().name(), this.regionCount, this.targetCommitName(),
                     this.clientShadowSync.regionCount(), this.clientShadowSync.totalVolume());
         }
 
-        ClientSchematicShadowSync sync = Objects.requireNonNull(this.clientShadowSync, "clientShadowSync");
+        LvcClientSchematicShadowSync sync = Objects.requireNonNull(this.clientShadowSync, "clientShadowSync");
 
         if (!sync.processNextBatch())
         {
@@ -1261,6 +1346,27 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
                 VOID_ENTITY_CLEANUP_VERTICAL_RADIUS, CLEANUP_COMMANDS_PER_TICK);
     }
 
+    private void prepareRetiredCoverageCommands()
+    {
+        if (this.retiredCoverageCommandsPrepared)
+        {
+            return;
+        }
+
+        this.retiredCoverageCommandsPrepared = true;
+        LvcIntPosition placementOrigin = this.requirePlacementOrigin();
+
+        for (LvcRetiredCoveragePlan.Cuboid cuboid : this.retiredCoveragePlan.cuboids())
+        {
+            LvcIntPosition min = placementOrigin.offset(cuboid.min());
+            LvcIntPosition max = placementOrigin.offset(cuboid.max());
+            this.cleanupCommandQueue.addLast(String.format(Locale.ROOT,
+                    "fill %d %d %d %d %d %d minecraft:air",
+                    min.x(), min.y(), min.z(), max.x(), max.y(), max.z()));
+            this.retiredCoverageCommands++;
+        }
+    }
+
     private void prepareFurnaceXpCleanupCommands()
     {
         if (this.cleanupCommandQueue.isEmpty() == false)
@@ -1548,6 +1654,11 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
         return Objects.requireNonNull(this.cleanupPlan, "cleanupPlan");
     }
 
+    private LvcIntPosition requirePlacementOrigin()
+    {
+        return LvcIntPosition.fromList(this.requirePlacement().origin());
+    }
+
     private BlockPos requireOrigin()
     {
         return Objects.requireNonNull(this.origin, "origin");
@@ -1703,215 +1814,6 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
         }
     }
 
-    private static final class ClientSchematicShadowSync
-    {
-        private final ClientLevel clientLevel;
-        private final LitematicaSchematic schematic;
-        private final BlockPos origin;
-        private final List<String> regionNames;
-        private final LongOpenHashSet renderSections = new LongOpenHashSet();
-        private final LongOpenHashSet renderChunks = new LongOpenHashSet();
-        private int regionIndex;
-        private int x;
-        private int y;
-        private int z;
-        private long processedVolume;
-        private long totalVolume;
-        private int pastedBlocks;
-        private int changedBlocks;
-        private int skippedStructureVoid;
-        private int skippedUnloaded;
-
-        private ClientSchematicShadowSync(ClientLevel clientLevel, LitematicaSchematic schematic, BlockPos origin)
-        {
-            this.clientLevel = Objects.requireNonNull(clientLevel, "clientLevel");
-            this.schematic = Objects.requireNonNull(schematic, "schematic");
-            this.origin = Objects.requireNonNull(origin, "origin");
-            this.regionNames = List.copyOf(schematic.getAreas().keySet());
-
-            for (String regionName : this.regionNames)
-            {
-                LitematicaBlockStateContainer container = Objects.requireNonNull(
-                        schematic.getSubRegionContainer(regionName), "subRegionContainer");
-                Vec3i size = container.getSize();
-                this.totalVolume += (long) size.getX() * (long) size.getY() * (long) size.getZ();
-            }
-        }
-
-        private boolean processNextBatch()
-        {
-            long deadline = Util.getNanos() + SERVUX_CLIENT_SYNC_BUDGET_NANOS;
-            BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
-
-            while (this.regionIndex < this.regionNames.size() && Util.getNanos() < deadline)
-            {
-                String regionName = this.regionNames.get(this.regionIndex);
-                LitematicaBlockStateContainer container = Objects.requireNonNull(
-                        this.schematic.getSubRegionContainer(regionName), "subRegionContainer");
-                BlockPos regionPos = Objects.requireNonNull(this.schematic.getSubRegionPosition(regionName),
-                        "subRegionPosition");
-                Vec3i size = container.getSize();
-
-                while (this.y < size.getY() && Util.getNanos() < deadline)
-                {
-                    BlockState targetState = container.get(this.x, this.y, this.z);
-                    this.processedVolume++;
-
-                    if (targetState.is(Blocks.STRUCTURE_VOID))
-                    {
-                        this.skippedStructureVoid++;
-                    }
-                    else
-                    {
-                        this.applyTargetBlock(regionPos, targetState, mutable);
-                    }
-
-                    this.advance(size);
-                }
-
-                if (this.y >= size.getY())
-                {
-                    this.regionIndex++;
-                    this.x = 0;
-                    this.y = 0;
-                    this.z = 0;
-                }
-            }
-
-            return this.regionIndex >= this.regionNames.size();
-        }
-
-        private void applyTargetBlock(BlockPos regionPos, BlockState targetState, BlockPos.MutableBlockPos mutable)
-        {
-            int worldX = this.origin.getX() + regionPos.getX() + this.x;
-            int worldY = this.origin.getY() + regionPos.getY() + this.y;
-            int worldZ = this.origin.getZ() + regionPos.getZ() + this.z;
-            int sectionX = SectionPos.blockToSectionCoord(worldX);
-            int sectionY = SectionPos.blockToSectionCoord(worldY);
-            int sectionZ = SectionPos.blockToSectionCoord(worldZ);
-
-            if (!this.clientLevel.hasChunk(sectionX, sectionZ))
-            {
-                this.skippedUnloaded++;
-                return;
-            }
-
-            mutable.set(worldX, worldY, worldZ);
-            this.pastedBlocks++;
-            this.renderSections.add(SectionPos.asLong(sectionX, sectionY, sectionZ));
-            this.renderChunks.add(chunkKey(sectionX, sectionZ));
-
-            BlockState currentState = this.clientLevel.getBlockState(mutable);
-
-            if (!statesEquivalent(currentState, targetState))
-            {
-                this.clientLevel.setBlock(mutable, targetState, CLIENT_SHADOW_SET_FLAGS);
-                this.changedBlocks++;
-            }
-        }
-
-        private void advance(Vec3i size)
-        {
-            this.x++;
-
-            if (this.x >= size.getX())
-            {
-                this.x = 0;
-                this.z++;
-            }
-
-            if (this.z >= size.getZ())
-            {
-                this.z = 0;
-                this.y++;
-            }
-        }
-
-        private void refreshRenderState()
-        {
-            LongIterator sectionIterator = this.renderSections.iterator();
-
-            while (sectionIterator.hasNext())
-            {
-                long section = sectionIterator.nextLong();
-                this.clientLevel.setSectionDirtyWithNeighbors(SectionPos.x(section), SectionPos.y(section), SectionPos.z(section));
-            }
-
-            LongIterator chunkIterator = this.renderChunks.iterator();
-
-            while (chunkIterator.hasNext())
-            {
-                long chunk = chunkIterator.nextLong();
-                SchematicWorldRefresher.INSTANCE.markSchematicChunksForRenderUpdate(chunkKeyX(chunk), chunkKeyZ(chunk));
-            }
-        }
-
-        private static long chunkKey(int x, int z)
-        {
-            return ((long) x & 0xFFFFFFFFL) | (((long) z & 0xFFFFFFFFL) << 32);
-        }
-
-        private static int chunkKeyX(long key)
-        {
-            return (int) (key & 0xFFFFFFFFL);
-        }
-
-        private static int chunkKeyZ(long key)
-        {
-            return (int) (key >>> 32);
-        }
-
-        private static boolean statesEquivalent(BlockState currentState, BlockState targetState)
-        {
-            return currentState.equals(targetState) || (currentState.isAir() && targetState.isAir());
-        }
-
-        private int regionCount()
-        {
-            return this.regionNames.size();
-        }
-
-        private long processedVolume()
-        {
-            return this.processedVolume;
-        }
-
-        private long totalVolume()
-        {
-            return this.totalVolume;
-        }
-
-        private int pastedBlocks()
-        {
-            return this.pastedBlocks;
-        }
-
-        private int changedBlocks()
-        {
-            return this.changedBlocks;
-        }
-
-        private int skippedStructureVoid()
-        {
-            return this.skippedStructureVoid;
-        }
-
-        private int skippedUnloaded()
-        {
-            return this.skippedUnloaded;
-        }
-
-        private int renderSectionCount()
-        {
-            return this.renderSections.size();
-        }
-
-        private int renderChunkCount()
-        {
-            return this.renderChunks.size();
-        }
-    }
-
     public enum Mode
     {
         CHECKOUT("LVC Checkout", LvcOperationJournal.Operation.CHECKOUT, "checkout"),
@@ -1936,11 +1838,13 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     private enum Phase
     {
         REQUEST_SERVUX_DATA("read server data"),
+        SCAN_RETIRED_COVERAGE("scan retired coverage"),
         BUILD("build target"),
         PREPARE_SERVUX_PAYLOAD("prepare servux payload"),
         WRITE_JOURNAL("prepare Git"),
         CLEAR_ENTITIES("void entity cleanup"),
         CLEAR_FURNACE_XP("clear furnace xp"),
+        CLEAR_RETIRED_COVERAGE("clear retired coverage"),
         SEND_PASTE("send paste"),
         WAIT_COMMANDS("wait commands"),
         SYNC_CLIENT("sync client"),
@@ -1956,7 +1860,7 @@ public final class LvcRemoteServerApplyTask extends LvcChunkedTaskBase<LvcRemote
     }
 
     public record Result(Mode mode, LvcWorldBackend backend, int regionCount, boolean lossy,
-                         boolean commandPasteScheduled)
+                         boolean commandPasteScheduled, boolean regionDefinitionsChanged)
     {
     }
 

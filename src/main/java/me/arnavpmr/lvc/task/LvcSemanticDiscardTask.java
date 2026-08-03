@@ -22,6 +22,7 @@ import net.minecraft.world.level.Level;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.LvcUserActionException;
 import me.arnavpmr.lvc.capture.LvcSiteWorkPlan;
+import me.arnavpmr.lvc.capture.LvcRetiredCoveragePlan;
 import me.arnavpmr.lvc.model.LvcChunk;
 import me.arnavpmr.lvc.model.LvcIntPosition;
 import me.arnavpmr.lvc.model.LvcManifest;
@@ -40,6 +41,7 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
     @Nullable private final String journalTargetBranch;
     @Nullable private final String journalSourceBranch;
     @Nullable private final String journalPreviousHead;
+    @Nullable private final String retiredCoverageSourceCommitId;
     @Nullable private String requestedCommitId;
     @Nullable private Git git;
     @Nullable private RevWalk revWalk;
@@ -49,7 +51,7 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
     @Nullable private LvcIntPosition origin;
     @Nullable private LvcSiteWorkPlan workPlan;
     @Nullable private LvcCommitChunkCache chunkCache;
-    private final Set<String> affectedRegionIds = new HashSet<>();
+    private final Set<String> affectedRegionNames = new HashSet<>();
     private List<Map.Entry<String, String>> chunkRefs = List.of();
     private List<RegionBounds> regionBounds = List.of();
     @Nullable private LvcSemanticRestoreEngine restoreEngine;
@@ -58,6 +60,7 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
     private boolean gitReset;
     private boolean operationWillDiscard;
     private boolean restoreComplete;
+    private boolean regionDefinitionsChanged;
     @Nullable private LvcTickFreezeScope tickFreezeScope;
 
     public LvcSemanticDiscardTask(LvcOperationHandle handle, Path repositoryDirectory, Level world,
@@ -86,6 +89,8 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
         this.journalTargetBranch = normalizeNullable(journalTargetBranch);
         this.journalSourceBranch = normalizeNullable(journalSourceBranch);
         this.journalPreviousHead = normalizeNullable(journalPreviousHead);
+        this.retiredCoverageSourceCommitId = journalOperation == LvcOperationJournal.Operation.MERGE ?
+                this.journalPreviousHead : null;
         this.requestedCommitId = commitId;
     }
 
@@ -107,9 +112,14 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
             String commitId = this.resolveCommitId();
             this.commit = LvcGitTreeReader.resolveCommit(repository, this.revWalk, commitId);
             this.requestedCommitId = this.commit.getName();
+            LvcManifest workingManifest = LvcSemanticRepository.readManifest(this.repositoryDirectory);
             LvcManifest manifest = LvcSemanticRepository.readCommitManifest(repository, this.commit);
+            this.regionDefinitionsChanged =
+                    !LvcSemanticRepository.sameRegionDefinitions(workingManifest, manifest);
             String siteId = LvcSemanticRepository.defaultSiteId(manifest);
             this.site = manifest.site(siteId);
+            LvcRetiredCoveragePlan retiredCoverage = this.createRetiredCoveragePlan(
+                    repository, this.revWalk, siteId, this.site);
             this.placement = LvcTrackingOverlayService.requireCurrentOrCachedSitePlacement(this.repositoryDirectory, this.site);
 
             LvcSemanticTaskContext.validatePlacementDimension(this.placement, this.world);
@@ -124,6 +134,7 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
                     this.origin,
                     this.chunkRefs,
                     this::readChunk,
+                    retiredCoverage,
                     this::prepareWorldMutation,
                     this::markAffectedRegions,
                     LvcSemanticRestoreEngine.Options.discard(this.requestedCommitId));
@@ -131,9 +142,10 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
             {
                 this.tickFreezeScope = LvcTickFreezeScope.acquire(serverWorld, this.handle());
             }
-            LvcDiagnostics.debug(this.handle(), "semantic discard initialized site={} commit={} dimension={} origin={} chunks={} trackedBlocks={} gitDirty={}",
+            LvcDiagnostics.debug(this.handle(), "semantic discard initialized site={} commit={} dimension={} origin={} chunks={} trackedBlocks={} retiredChunks={} retiredBlocks={} gitDirty={} regionDefinitionsChanged={}",
                     siteId, this.requestedCommitId, this.placement.dimension(), this.placement.origin(),
-                    this.chunkRefs.size(), this.workPlan.blockCount(), this.hasGitChanges);
+                    this.chunkRefs.size(), this.workPlan.blockCount(), retiredCoverage.chunkCount(),
+                    retiredCoverage.blockCount(), this.hasGitChanges, this.regionDefinitionsChanged);
             this.updateProgressHud();
         }
         catch (Exception e)
@@ -186,8 +198,9 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
         LvcOperationJournal.delete(this.repositoryDirectory);
         LvcCommitChunkCache.Stats cacheStats = this.requireChunkCache().stats();
         LvcSemanticRestoreEngine engine = this.requireRestoreEngine();
-        int restoredRegionCount = this.affectedRegionIds.isEmpty() && engine.changedEntities() > 0 ?
-                this.requireSite().regions().size() : this.affectedRegionIds.size();
+        int restoredRegionCount = this.affectedRegionNames.isEmpty() &&
+                (engine.restoredBlocks() > 0 || engine.changedEntities() > 0) ?
+                this.requireSite().regions().size() : this.affectedRegionNames.size();
         LvcDiagnostics.debug(this.handle(),
                 "semantic discard complete commit={} restoredBlocks={} changedChunks={} affectedRegions={} totalRegions={} blockEntityRewrites={} clearedEntities={} spawnedEntities={} discarded={} chunkCacheCommitHits={} chunkCacheObjectHits={} chunkCacheMisses={} chunkCacheCommitEntries={} chunkCacheObjectEntries={}",
                 this.requireCommitId(), engine.restoredBlocks(), engine.changedChunks(), restoredRegionCount,
@@ -196,7 +209,8 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
                 cacheStats.commitHits(), cacheStats.objectHits(), cacheStats.misses(),
                 cacheStats.commitEntries(), cacheStats.objectEntries());
         return new Result(this.requireCommitId(), restoredRegionCount, engine.restoredBlocks(),
-                engine.blockEntityRewrites(), this.hasGitChanges || this.operationWillDiscard);
+                engine.blockEntityRewrites(), this.hasGitChanges || this.operationWillDiscard,
+                this.regionDefinitionsChanged);
     }
 
     @Override
@@ -262,6 +276,21 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
         this.writeJournalIfNeeded();
     }
 
+    private LvcRetiredCoveragePlan createRetiredCoveragePlan(
+            Repository repository, RevWalk walk, String siteId, LvcManifest.Site targetSite)
+            throws Exception
+    {
+        if (this.retiredCoverageSourceCommitId == null)
+        {
+            return LvcRetiredCoveragePlan.empty();
+        }
+
+        RevCommit sourceCommit = LvcGitTreeReader.resolveCommit(
+                repository, walk, this.retiredCoverageSourceCommitId);
+        LvcManifest sourceManifest = LvcSemanticRepository.readCommitManifest(repository, sourceCommit);
+        return LvcRetiredCoveragePlan.between(sourceManifest.site(siteId), targetSite);
+    }
+
     private void prepareWorldMutation() throws Exception
     {
         this.markOperationWillDiscard();
@@ -313,7 +342,7 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
         {
             if (region.contains(projectPos))
             {
-                this.affectedRegionIds.add(region.id());
+                this.affectedRegionNames.add(region.name());
             }
         }
     }
@@ -362,15 +391,15 @@ public final class LvcSemanticDiscardTask extends LvcChunkedTaskBase<LvcSemantic
     }
 
     public record Result(String commitId, int restoredRegionCount, int restoredBlocks, int blockEntityRewrites,
-                         boolean discarded)
+                         boolean discarded, boolean regionDefinitionsChanged)
     {
     }
 
-    private record RegionBounds(String id, LvcIntPosition min, LvcIntPosition size)
+    private record RegionBounds(String name, LvcIntPosition min, LvcIntPosition size)
     {
         private static RegionBounds of(LvcManifest.Region region)
         {
-            return new RegionBounds(region.id(),
+            return new RegionBounds(region.name(),
                     LvcIntPosition.fromList(region.min()),
                     LvcIntPosition.fromList(region.size()));
         }

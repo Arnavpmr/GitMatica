@@ -260,15 +260,15 @@ public record LvcManifest(
             requireNotBlank(this.dimension, "site dimension");
             normalizeHashIndexPath(this.hashIndex);
 
-            Set<String> regionIds = new HashSet<>();
+            Set<String> regionNames = new HashSet<>();
 
             for (Region region : this.regions)
             {
                 region.validate();
 
-                if (!regionIds.add(region.id()))
+                if (!regionNames.add(region.name()))
                 {
-                    throw new IllegalArgumentException("Duplicate LVC region id in site " + this.id + ": " + region.id());
+                    throw new IllegalArgumentException("Duplicate LVC region name in site " + this.id + ": " + region.name());
                 }
             }
 
@@ -299,7 +299,7 @@ public record LvcManifest(
         }
     }
 
-    public record Region(String id, String name, List<Integer> min, List<Integer> size)
+    public record Region(String name, List<Integer> min, List<Integer> size)
     {
         public Region
         {
@@ -309,7 +309,6 @@ public record LvcManifest(
 
         private void validate()
         {
-            requireNotBlank(this.id, "region id");
             requireNotBlank(this.name, "region name");
             validateVector(this.min, "region min", false);
             validateVector(this.size, "region size", true);

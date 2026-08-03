@@ -15,5 +15,6 @@ final class LvcSemanticStorageIntegrationTest
         LvcSemanticOverlayCacheIntegrationTest.runAll();
         LvcSemanticSchematicIntegrationTest.runAll();
         LvcRemoteSparsePlannerIntegrationTest.runAll();
+        LvcRetiredCoverageIntegrationTest.runAll();
     }
 }

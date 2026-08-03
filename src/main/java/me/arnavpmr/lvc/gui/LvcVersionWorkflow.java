@@ -134,8 +134,8 @@ final class LvcVersionWorkflow
             Level captureWorld = LvcWorldAccess.resolveSemanticCaptureWorld(world);
             LvcPlayerIdentity identity = new LvcPlayerIdentity(player.getName().getString(), player.getUUID());
             var state = LvcSemanticProjectEditor.readState(controller.gui.repositoryDirectory);
-            List<LvcManifest.Region> updatedRegions = LvcProjectSelectionStorage.createRegionsFromSelection(selection,
-                    state.placementOrigin(), state.regions());
+            List<LvcManifest.Region> updatedRegions = LvcProjectSelectionStorage.createRegionsFromSelection(
+                    selection, state.placementOrigin());
             LvcSemanticCommitTask task = new LvcSemanticCommitTask(
                     handle.get(),
                     controller.gui.repositoryDirectory,

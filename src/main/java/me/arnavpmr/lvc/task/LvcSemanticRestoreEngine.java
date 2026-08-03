@@ -23,6 +23,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import fi.dy.masa.litematica.util.WorldUtils;
 import me.arnavpmr.lvc.LvcDiagnostics;
+import me.arnavpmr.lvc.capture.LvcRetiredCoveragePlan;
+import me.arnavpmr.lvc.capture.LvcSiteWorkPlan;
 import me.arnavpmr.lvc.model.LvcChunk;
 import me.arnavpmr.lvc.model.LvcChunkCoordinate;
 import me.arnavpmr.lvc.model.LvcIntPosition;
@@ -42,6 +44,7 @@ public final class LvcSemanticRestoreEngine
     private final LvcManifest.Site targetSite;
     private final LvcIntPosition origin;
     private final List<Map.Entry<String, String>> chunkRefs;
+    private final List<LvcSiteWorkPlan.ChunkWork> retiredCoverageChunks;
     private final ChunkReader chunkReader;
     private final MutationCallback mutationCallback;
     private final PositionCallback restoredPositionCallback;
@@ -58,6 +61,7 @@ public final class LvcSemanticRestoreEngine
     private final List<String> mismatchSamples = new ArrayList<>();
     private Phase phase = Phase.INITIAL_SCAN;
     private int scanChunkIndex;
+    private int retiredScanChunkIndex;
     private int rewriteIndex;
     private int pendingRewriteCount;
     private int restoredBlocks;
@@ -75,10 +79,22 @@ public final class LvcSemanticRestoreEngine
                                     MutationCallback mutationCallback, PositionCallback restoredPositionCallback,
                                     Options options)
     {
+        this(world, targetSite, origin, chunkRefs, chunkReader, LvcRetiredCoveragePlan.empty(),
+                mutationCallback, restoredPositionCallback, options);
+    }
+
+    public LvcSemanticRestoreEngine(ServerLevel world, LvcManifest.Site targetSite, LvcIntPosition origin,
+                                    List<Map.Entry<String, String>> chunkRefs, ChunkReader chunkReader,
+                                    LvcRetiredCoveragePlan retiredCoverage,
+                                    MutationCallback mutationCallback, PositionCallback restoredPositionCallback,
+                                    Options options)
+    {
         this.world = Objects.requireNonNull(world, "world");
         this.targetSite = Objects.requireNonNull(targetSite, "targetSite");
         this.origin = Objects.requireNonNull(origin, "origin");
         this.chunkRefs = List.copyOf(Objects.requireNonNull(chunkRefs, "chunkRefs"));
+        this.retiredCoverageChunks = List.copyOf(
+                Objects.requireNonNull(retiredCoverage, "retiredCoverage").chunks());
         this.chunkReader = Objects.requireNonNull(chunkReader, "chunkReader");
         this.mutationCallback = Objects.requireNonNull(mutationCallback, "mutationCallback");
         this.restoredPositionCallback = Objects.requireNonNull(restoredPositionCallback, "restoredPositionCallback");
@@ -113,7 +129,7 @@ public final class LvcSemanticRestoreEngine
     {
         return switch (this.phase)
         {
-            case INITIAL_SCAN -> this.scanChunkIndex;
+            case INITIAL_SCAN -> this.scanChunkIndex + this.retiredScanChunkIndex;
             case INITIAL_REWRITE -> this.rewriteIndex;
             case RESTORE_ENTITIES, CLIENT_SYNC, COMPLETE -> this.currentTotal();
         };
@@ -124,7 +140,7 @@ public final class LvcSemanticRestoreEngine
         return switch (this.phase)
         {
             case INITIAL_REWRITE -> Math.max(this.pendingRewriteRealChunkKeys.size(), 1);
-            default -> this.chunkRefs.size();
+            default -> this.chunkRefs.size() + this.retiredCoverageChunks.size();
         };
     }
 
@@ -173,8 +189,17 @@ public final class LvcSemanticRestoreEngine
             return false;
         }
 
-        LvcDiagnostics.debug("semantic {} initial scan complete commit={} chunks={} realChunks={} diffBlocks={} samples={} omittedSamples={}",
-                this.operationName, this.commitId, this.chunkRefs.size(), this.pendingRewriteRealChunkKeys.size(),
+        if (this.retiredScanChunkIndex < this.retiredCoverageChunks.size())
+        {
+            LvcSiteWorkPlan.ChunkWork work = this.retiredCoverageChunks.get(this.retiredScanChunkIndex);
+            this.scanRetiredCoverageChunk(work, this.retiredScanChunkIndex);
+            this.retiredScanChunkIndex++;
+            return false;
+        }
+
+        LvcDiagnostics.debug("semantic {} initial scan complete commit={} targetChunks={} retiredChunks={} realChunks={} diffBlocks={} samples={} omittedSamples={}",
+                this.operationName, this.commitId, this.chunkRefs.size(), this.retiredCoverageChunks.size(),
+                this.pendingRewriteRealChunkKeys.size(),
                 this.pendingRewriteCount, this.mismatchSamples.size(), this.latestScanOmittedSamples);
 
         if (this.pendingRewriteRealChunkKeys.isEmpty())
@@ -302,6 +327,47 @@ public final class LvcSemanticRestoreEngine
         this.pendingRewriteCount++;
     }
 
+    private void scanRetiredCoverageChunk(LvcSiteWorkPlan.ChunkWork work, int index) throws IOException
+    {
+        LvcChunkCoordinate coordinate = work.coordinate();
+
+        try
+        {
+            for (LvcTrackedBlockCursor.Position position : LvcTrackedBlockCursor.positions(
+                    coordinate, this.origin, work.mask(),
+                    LvcChunk.DEFAULT_SIZE, LvcChunk.DEFAULT_SIZE, LvcChunk.DEFAULT_SIZE))
+            {
+                RewriteTarget target = this.retiredTargetFor(position);
+
+                try
+                {
+                    LvcSemanticWorldApplier.validateRestoreTarget(this.world, target.blockPos());
+                    BlockState currentState = this.world.getBlockState(target.blockPos());
+                    boolean stateMatches = LvcSemanticWorldApplier.isRestoredStateAcceptable(
+                            currentState, Blocks.AIR.defaultBlockState());
+                    this.authoritativeClientSyncPositions.add(target.blockPos().asLong());
+
+                    if (!stateMatches)
+                    {
+                        this.addMismatchSample(coordinate.key(), target, currentState, false, true);
+                        this.addPendingRewriteTarget(target);
+                    }
+                }
+                catch (Exception e)
+                {
+                    throw LvcSemanticWorldApplier.withPositionContext(
+                            this.operationName + " retired coverage scan", coordinate,
+                            target.maskIndex(), target.trackedOrdinal(), target.projectPos(),
+                            target.blockPos(), target.blockState(), null, e);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            throw this.withRetiredChunkContext(coordinate, index, e);
+        }
+    }
+
     private void rewriteTargets(String kind, long realChunkKey, List<RewriteTarget> targets) throws IOException
     {
         try
@@ -330,7 +396,7 @@ public final class LvcSemanticRestoreEngine
 
     private void rewriteTargetWithoutSuppression(RewriteTarget target) throws IOException
     {
-        if (this.targetMode == TargetMode.CLEAR)
+        if (target.clearTarget())
         {
             if (LvcSemanticWorldApplier.clearBlock(this.world, target.blockPos()))
             {
@@ -371,13 +437,21 @@ public final class LvcSemanticRestoreEngine
         if (this.targetMode == TargetMode.CLEAR)
         {
             return new RewriteTarget(block.coordinate(), block.maskIndex(), block.trackedOrdinal(),
-                    block.projectPos(), block.blockPos(), "minecraft:air", null, Blocks.AIR.defaultBlockState());
+                    block.projectPos(), block.blockPos(), "minecraft:air", null,
+                    Blocks.AIR.defaultBlockState(), true);
         }
 
         String blockState = block.blockState();
         return new RewriteTarget(block.coordinate(), block.maskIndex(), block.trackedOrdinal(), block.projectPos(),
                 block.blockPos(), blockState, block.blockEntityBytes(),
-                LvcSemanticWorldApplier.parseRestoreBlockState(blockState));
+                LvcSemanticWorldApplier.parseRestoreBlockState(blockState), false);
+    }
+
+    private RewriteTarget retiredTargetFor(LvcTrackedBlockCursor.Position position)
+    {
+        return new RewriteTarget(position.coordinate(), position.maskIndex(), position.trackedOrdinal(),
+                position.projectPos(), position.blockPos(), "minecraft:air", null,
+                Blocks.AIR.defaultBlockState(), true);
     }
 
     private int clearLiveEntities(String reason) throws IOException
@@ -498,6 +572,20 @@ public final class LvcSemanticRestoreEngine
         }
     }
 
+    private IOException withRetiredChunkContext(LvcChunkCoordinate coordinate, int index, Exception cause)
+    {
+        String message = "LVC " + this.operationName + " failed during retired coverage scan chunk " +
+                coordinate.key() + " (" + (index + 1) + "/" + this.retiredCoverageChunks.size() +
+                ", commit " + this.commitId + ")";
+
+        if (cause.getMessage() != null && !cause.getMessage().isBlank())
+        {
+            message += ": " + cause.getMessage();
+        }
+
+        return new IOException(message, cause);
+    }
+
     private static long realChunkKey(BlockPos pos)
     {
         return ChunkPos.pack(SectionPos.blockToSectionCoord(pos.getX()), SectionPos.blockToSectionCoord(pos.getZ()));
@@ -576,7 +664,7 @@ public final class LvcSemanticRestoreEngine
 
     private record RewriteTarget(LvcChunkCoordinate coordinate, int maskIndex, int trackedOrdinal,
                                  LvcIntPosition projectPos, BlockPos blockPos, String blockState,
-                                 @Nullable byte[] blockEntityBytes, BlockState state)
+                                 @Nullable byte[] blockEntityBytes, BlockState state, boolean clearTarget)
     {
     }
 }

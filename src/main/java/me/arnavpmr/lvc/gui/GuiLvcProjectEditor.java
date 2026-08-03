@@ -15,6 +15,7 @@ import me.arnavpmr.lvc.gui.widgets.WidgetLvcBlockPosEditor;
 import me.arnavpmr.lvc.gui.widgets.WidgetLvcProjectSubRegion;
 import me.arnavpmr.lvc.gui.widgets.WidgetLvcProjectSubRegionList;
 import me.arnavpmr.lvc.model.LvcManifest;
+import me.arnavpmr.lvc.overlay.LvcTrackingSubRegionSelection;
 import me.arnavpmr.lvc.LvcReference;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.gui.GuiMainMenu;
@@ -60,10 +61,11 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     private static final int READ_ONLY_TEXT_COLOR = 0xFFFFFFFF;
 
     private final Path repositoryDirectory;
+    private final LvcSubRegionEditorWorkflow subRegionWorkflow;
     private String projectName;
     @Nullable private LvcProjectEditorState state;
     @Nullable private WidgetLvcBlockPosEditor originEditor;
-    @Nullable private String selectedRegionId;
+    @Nullable private String selectedRegionName;
     private String statusText = "";
     private int statusColor = STATUS_COLOR;
 
@@ -71,6 +73,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     {
         super(MARGIN, TOP_Y + 128);
         this.repositoryDirectory = repositoryDirectory;
+        this.subRegionWorkflow = new LvcSubRegionEditorWorkflow(this, repositoryDirectory);
         this.projectName = projectName;
         this.title = StringUtils.translate("gitmatica.gui.title.lvc_project_editor", LvcReference.MOD_VERSION, projectName);
     }
@@ -95,8 +98,8 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     @Override
     protected WidgetLvcProjectSubRegionList createListWidget(int listX, int listY)
     {
-        List<LvcManifest.Region> regions = this.state != null ? this.state.regions() : List.of();
-        return new WidgetLvcProjectSubRegionList(listX, listY, this.getBrowserWidth(), this.getBrowserHeight(), regions, this, this);
+        return new WidgetLvcProjectSubRegionList(
+                listX, listY, this.getBrowserWidth(), this.getBrowserHeight(), this, this);
     }
 
     @Override
@@ -209,22 +212,26 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     {
         if (this.state == null)
         {
-            this.selectedRegionId = null;
+            this.selectRegion(null);
             return;
         }
 
-        if (this.selectedRegionId != null)
+        String selected = this.selectedRegionName != null ? this.selectedRegionName :
+                LvcTrackingSubRegionSelection.get(this.repositoryDirectory);
+
+        if (selected != null)
         {
             for (LvcManifest.Region region : this.state.regions())
             {
-                if (region.id().equals(this.selectedRegionId))
+                if (region.name().equals(selected))
                 {
+                    this.selectRegion(selected);
                     return;
                 }
             }
         }
 
-        this.selectedRegionId = this.state.regions().isEmpty() ? null : this.state.regions().get(0).id();
+        this.selectRegion(null);
     }
 
     private void createTopButtons()
@@ -567,15 +574,52 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     }
 
     @Nullable
-    public String getSelectedRegionId()
+    public String getSelectedRegionName()
     {
-        return this.selectedRegionId;
+        return this.selectedRegionName;
     }
 
     @Override
     public void onSelectionChange(LvcManifest.Region entry)
     {
-        this.selectedRegionId = entry.id();
+        this.selectRegion(entry != null && !entry.name().equals(this.selectedRegionName) ? entry.name() : null);
+    }
+
+    @Nullable
+    LvcProjectEditorState getEditorState()
+    {
+        return this.state;
+    }
+
+    String getProjectName()
+    {
+        return this.projectName;
+    }
+
+    public List<LvcManifest.Region> getRegions()
+    {
+        return this.state != null ? this.state.regions() : List.of();
+    }
+
+    void selectRegion(@Nullable String regionName)
+    {
+        this.selectedRegionName = regionName;
+        LvcTrackingSubRegionSelection.set(this.repositoryDirectory, regionName);
+    }
+
+    public void promptRenameRegion(LvcManifest.Region region)
+    {
+        this.subRegionWorkflow.promptRenameRegion(region);
+    }
+
+    public void openRegionEditor(LvcManifest.Region region)
+    {
+        this.subRegionWorkflow.openRegionEditor(region);
+    }
+
+    public void confirmDeleteRegion(LvcManifest.Region region)
+    {
+        this.subRegionWorkflow.confirmDeleteRegion(region);
     }
 
     private enum ButtonType
@@ -620,10 +664,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         private boolean isEnabled()
         {
             return this != CHANGE_SELECTION_MODE &&
-                    this != CHANGE_CORNER_MODE &&
-                    this != NEW_SUB_REGION &&
-                    this != SAVE_VERSION &&
-                    this != ANALYZE_AREA;
+                    this != CHANGE_CORNER_MODE;
         }
     }
 
@@ -634,6 +675,9 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         {
             switch (this.type)
             {
+                case NEW_SUB_REGION -> this.gui.subRegionWorkflow.promptNewRegion();
+                case SAVE_VERSION -> this.gui.subRegionWorkflow.promptSaveVersion();
+                case ANALYZE_AREA -> this.gui.subRegionWorkflow.analyzeArea();
                 case SET_ORIGIN_TO_PLAYER -> this.gui.setOriginToPlayer();
                 case MANUAL_ORIGIN -> this.gui.setSavedStatus("gitmatica.message.lvc_project_editor.metadata_locked");
                 case PROJECT_MANAGER -> this.gui.openProjectManager();

@@ -187,7 +187,7 @@
   "gitmatica.gui.label.lvc_project.task_chunks": "Subchunks: %s / %s",
   "gitmatica.gui.label.lvc_project.task_objects": "Objects: %s / %s",
   "gitmatica.gui.label.lvc_project.task_phase": "Phase: %s",
-  "gitmatica.gui.message.lvc_project.merge_conflict_choose": "Merge conflicts were found. Please choose a source to use to resolve all conflicts.",
+  "gitmatica.gui.message.lvc_project.merge_conflict_choose": "Sub-region or block conflicts were found. Choose one source to resolve every conflict.",
   "gitmatica.gui.message.lvc_project.recovery_required": "An interrupted operation is pending. Restart or abort it before running another operation.",
   "gitmatica.gui.message.lvc_project.recovery_restart_action": "Restart clears stale recovery data and starts that operation again.",
   "gitmatica.gui.message.lvc_project.recovery_abort_action": "Abort clears stale recovery data without running it.",
@@ -353,5 +353,14 @@
   "gitmatica.gui.message.lvc_project_manager.confirm_delete_project": "Delete project '%s' from disk?\nThis removes the local Git repository and cannot be undone from Gitmatica.",
   "gitmatica.gui.message.lvc_project_editor.confirm_delete_region": "Delete sub-region '%s' from the project?\nThis changes versioned project metadata and will be committed on Save Version.",
   "gitmatica.gui.message.lvc_project.detached_head_commit": "HEAD is detached after checkout, so cannot commit safely. Checkout %s and continue committing there?",
+  "gitmatica.config.hotkeys.comment.configureSubRegion": "Open the Configure Sub-region dialog for the selected\nsub-region in the selected Gitmatica project",
+  "gitmatica.config.hotkeys.name.configureSubRegion": "configureSubRegion",
+  "gitmatica.gui.title.lvc_project_editor.configure_sub_region": "Configure sub-region: %s",
+  "gitmatica.gui.label.lvc_project_editor.region_x1": "X1",
+  "gitmatica.gui.label.lvc_project_editor.region_x2": "X2",
+  "gitmatica.error.lvc_project_editor.region_name_duplicate": "A sub-region named '%s' already exists.",
+  "gitmatica.error.lvc_project_editor.region_required": "Project must have at least one sub-region.",
+  "gitmatica.error.lvc_project_editor.region_size_positive": "Sub-region sizes must be greater than zero.",
+  "gitmatica.error.lvc_project_editor.select_sub_region": "Select a sub-region before opening its configuration.",
   "modmenu.descriptionTranslation.gitmatica": "Git-backed version control for Litematica projects."
 }
