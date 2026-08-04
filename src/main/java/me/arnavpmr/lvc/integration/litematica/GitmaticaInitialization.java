@@ -28,6 +28,7 @@ public final class GitmaticaInitialization implements IInitializationHandler
                 new ModInfo(LvcReference.MOD_ID, LvcReference.MOD_NAME, GuiLvcConfigs::new));
 
         InputEventHandler.getKeybindManager().registerKeybindProvider(LvcInputHandler.getInstance());
+        InputEventHandler.getInputManager().registerKeyboardInputHandler(LvcInputHandler.getInstance());
         LvcKeyCallbacks.init();
 
         RenderEventHandler.getInstance().registerInGameGuiRenderer(new GitmaticaHudRenderer());

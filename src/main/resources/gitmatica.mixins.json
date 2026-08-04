@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_25",
   "client": [
     "access.PlacementManagerDaemonAccess",
+    "data.MixinDataManager",
     "gui.MixinGuiMainMenu",
     "gui.MixinGuiSchematicSaveBase",
     "gui.widget.MixinBlockMismatchInfo",
@@ -26,7 +27,9 @@
     "render.MixinChunkRendererSchematicVbo",
     "render.MixinOverlayRenderer",
     "render.MixinWorldRendererSchematic",
+    "selection.MixinSelectionManager",
     "task.MixinTaskScheduler",
+    "tool.MixinToolMode",
     "verifier.MixinSchematicVerifier"
   ],
   "injectors": {

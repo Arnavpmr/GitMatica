@@ -33,7 +33,7 @@ import fi.dy.masa.malilib.gui.Message.MessageType;
 import fi.dy.masa.malilib.util.GuiUtils;
 import fi.dy.masa.malilib.util.StringUtils;
 
-final class LvcSubRegionEditorWorkflow
+public final class LvcSubRegionEditorWorkflow
 {
     private final GuiLvcProjectEditor gui;
     private final Path repositoryDirectory;
@@ -359,14 +359,14 @@ final class LvcSubRegionEditorWorkflow
 
         GuiBase.openGui(new GuiLvcProjectSubRegionDialog(
                 GuiUtils.getCurrentScreen(), selected, state.placementOrigin(),
-                (min, size) -> updateRegionBoundsFromHotkey(
+                (min, size) -> applyRegionBounds(
                         repositoryDirectory, state.projectName(), selected.name(), min, size)
         ));
         return true;
     }
 
-    private static boolean updateRegionBoundsFromHotkey(Path repositoryDirectory, String projectName,
-                                                        String regionName, BlockPos min, BlockPos size)
+    public static boolean applyRegionBounds(Path repositoryDirectory, String projectName,
+                                            String regionName, BlockPos min, BlockPos size)
     {
         if (LvcTaskRegistry.hasActiveOperation())
         {

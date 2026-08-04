@@ -9,6 +9,7 @@ import me.arnavpmr.lvc.Gitmatica;
 public final class GitmaticaMixinAudit
 {
     private static final String[] TARGET_CLASSES = {
+            "fi.dy.masa.litematica.data.DataManager",
             "fi.dy.masa.litematica.data.EntityDataManager",
             "fi.dy.masa.litematica.event.KeyCallbacks$KeyCallbackHotkeys",
             "fi.dy.masa.litematica.gui.GuiMainMenu",
@@ -21,10 +22,12 @@ public final class GitmaticaMixinAudit
             "fi.dy.masa.litematica.render.schematic.ChunkRendererSchematicVbo",
             "fi.dy.masa.litematica.render.schematic.WorldRendererSchematic",
             "fi.dy.masa.litematica.scheduler.TaskScheduler",
+            "fi.dy.masa.litematica.selection.SelectionManager",
             "fi.dy.masa.litematica.schematic.placement.PlacementManagerDaemonHandler",
             "fi.dy.masa.litematica.schematic.placement.PlacementManagerTask",
             "fi.dy.masa.litematica.schematic.placement.PlacementManagerTaskRebuild",
             "fi.dy.masa.litematica.schematic.verifier.SchematicVerifier",
+            "fi.dy.masa.litematica.tool.ToolMode",
             "net.minecraft.client.gui.render.GuiRenderer",
             "fi.dy.masa.malilib.render.InventoryOverlay",
             "net.minecraft.client.gui.Gui",

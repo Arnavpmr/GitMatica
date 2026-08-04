@@ -13,6 +13,8 @@ import fi.dy.masa.malilib.hotkeys.IKeybind;
 import fi.dy.masa.malilib.hotkeys.KeyAction;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.gui.GuiLvcChangeViewer;
+import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
+import me.arnavpmr.lvc.integration.litematica.tool.LvcToolModes;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
 
 @Mixin(targets = "fi.dy.masa.litematica.event.KeyCallbacks$KeyCallbackHotkeys")
@@ -24,6 +26,14 @@ abstract class MixinKeyCallbackHotkeys
             IKeybind key,
             CallbackInfoReturnable<Boolean> callbackInfo)
     {
+        if (LvcToolModes.isEditSubregionsActive() &&
+                key == Hotkeys.TOOL_SELECT_ELEMENTS.getKeybind() &&
+                LvcSubRegionEditSession.selectOtherSubRegionAtCrosshair(200))
+        {
+            callbackInfo.setReturnValue(true);
+            return;
+        }
+
         if (key != Hotkeys.OPEN_GUI_SCHEMATIC_VERIFIER.getKeybind())
         {
             return;
