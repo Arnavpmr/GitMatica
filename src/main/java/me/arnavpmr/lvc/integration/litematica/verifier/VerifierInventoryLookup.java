@@ -22,6 +22,7 @@ import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
 import fi.dy.masa.litematica.schematic.placement.SchematicPlacementManager;
 import fi.dy.masa.litematica.util.PositionUtils;
 import fi.dy.masa.litematica.util.SchematicUtils;
+import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
 
 public class VerifierInventoryLookup
 {
@@ -131,6 +132,7 @@ public class VerifierInventoryLookup
         SchematicPlacement selectedPlacement = manager.getSelectedSchematicPlacement();
         List<SchematicPlacementManager.PlacementPart> parts = manager.getAllPlacementsTouchingChunk(worldPos)
                 .stream()
+                .filter(part -> LvcTrackingOverlayService.isSemanticTrackingPlacement(part.getPlacement()))
                 .sorted(Comparator.comparing(part -> part.getPlacement() != selectedPlacement))
                 .toList();
 
