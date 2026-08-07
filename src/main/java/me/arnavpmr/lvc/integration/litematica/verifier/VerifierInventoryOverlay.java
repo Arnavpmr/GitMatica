@@ -104,6 +104,11 @@ public class VerifierInventoryOverlay
         return new VerifierInventoryOverlay(boundPreview, true).drawStackInternal(ctx, slot, stack);
     }
 
+    public static boolean hasBoundScreenOverlay()
+    {
+        return boundPreview != null;
+    }
+
     public static void finalizeDrawStack()
     {
         isRenderingTransparentItem = false;
