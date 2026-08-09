@@ -14,7 +14,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.minecraft.core.BlockPos;
 import net.minecraft.client.renderer.chunk.VisGraph;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 import fi.dy.masa.litematica.data.DataManager;
@@ -110,15 +109,27 @@ abstract class MixinChunkRendererSchematicVbo
             at = @At(
                     value = "INVOKE",
                     target = "Lfi/dy/masa/litematica/render/schematic/ChunkRendererSchematicVbo;getOverlayType(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/block/state/BlockState;)Lfi/dy/masa/litematica/util/OverlayType;"))
-    private OverlayType gitmatica$inventoryMismatchOverlay(
+    private OverlayType gitmatica$semanticOverlayType(
             ChunkRendererSchematicVbo renderer,
             BlockState schematicState,
             BlockState clientState)
     {
         RenderContext context = GITMATICA$RENDER_CONTEXT.get();
-        return context != null && context.inventoryMismatch()
-                ? OverlayType.WRONG_STATE
-                : this.getOverlayType(schematicState, clientState);
+
+        if (context != null)
+        {
+            if (context.inventoryMismatch())
+            {
+                return OverlayType.WRONG_STATE;
+            }
+
+            if (context.retiredState() != null)
+            {
+                return OverlayType.MISSING;
+            }
+        }
+
+        return this.getOverlayType(schematicState, clientState);
     }
 
     @Redirect(
@@ -134,22 +145,6 @@ abstract class MixinChunkRendererSchematicVbo
         RenderContext context = GITMATICA$RENDER_CONTEXT.get();
         return context != null && context.retiredState() != null
                 ? context.retiredState()
-                : world.getBlockState(position);
-    }
-
-    @Redirect(
-            method = "renderBlocksAndOverlay",
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lfi/dy/masa/litematica/render/schematic/ChunkCacheSchematic;getBlockState(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;",
-                    ordinal = 1))
-    private BlockState gitmatica$retiredConceptualAir(
-            ChunkCacheSchematic world,
-            BlockPos position)
-    {
-        RenderContext context = GITMATICA$RENDER_CONTEXT.get();
-        return context != null && context.retiredState() != null
-                ? Blocks.AIR.defaultBlockState()
                 : world.getBlockState(position);
     }
 
