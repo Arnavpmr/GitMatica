@@ -51,6 +51,8 @@ public final class LvcVerifierHiddenMismatchIntegrationTest
                 LvcVerifierHiddenMismatchIntegrationTest::removedContainersDiscardInventoryMismatches);
         run("render filters are immutable and revisioned",
                 LvcVerifierHiddenMismatchIntegrationTest::renderFiltersAreRevisioned);
+        run("structural removals survive verifier reset and hidden filters",
+                LvcVerifierHiddenMismatchIntegrationTest::structuralRemovalsSurviveReset);
     }
 
     private static void hiddenStateRestores()
@@ -190,6 +192,41 @@ public final class LvcVerifierHiddenMismatchIntegrationTest
                 "All should restore unfiltered rendering");
         assertTrue(state.renderFilter().includes(MismatchType.EXTRA, added),
                 "inactive filters should include every mismatch");
+    }
+
+    private static void structuralRemovalsSurviveReset()
+    {
+        GitmaticaVerifierState state = new GitmaticaVerifierState();
+        BlockPos first = new BlockPos(1, 2, 3);
+        BlockPos second = new BlockPos(2, 2, 3);
+        BlockState stone = Blocks.STONE.defaultBlockState();
+        Map<BlockPos, BlockState> expected = Map.of(first, stone, second, stone);
+        BlockMismatch aggregate = new BlockMismatch(
+                MismatchType.MISSING,
+                stone,
+                Blocks.AIR.defaultBlockState(),
+                2);
+
+        state.setStructuralMismatches(expected);
+        assertEquals(2, state.structuralMismatchCount(),
+                "HEAD-sourced removals should be visible");
+        assertTrue(state.hideStructuralMismatches(aggregate),
+                "Hide should match an aggregated structural row by state pair");
+        assertEquals(0, state.structuralMismatchCount(),
+                "Hide should remove every matching structural position");
+
+        state.clear();
+        state.setStructuralMismatches(expected);
+        assertEquals(0, state.structuralMismatchCount(),
+                "verifier restart should preserve the hidden state-pair filter");
+        assertTrue(state.hasHiddenMismatches(),
+                "hidden structural rows should keep Reset Hidden enabled");
+
+        state.resetHiddenStructuralMismatches();
+        assertEquals(2, state.structuralMismatchCount(),
+                "Reset Hidden should restore structural removals");
+        assertTrue(!state.hasHiddenMismatches(),
+                "restoring structural removals should clear hidden state");
     }
 
     private static void run(String name, ThrowingRunnable test) throws Exception

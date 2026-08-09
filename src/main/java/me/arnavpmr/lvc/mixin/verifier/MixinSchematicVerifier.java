@@ -49,6 +49,7 @@ import me.arnavpmr.lvc.gui.LvcVerifierStartWorkflow;
 import me.arnavpmr.lvc.integration.litematica.verifier.VerifierMismatchMetadata;
 import me.arnavpmr.lvc.integration.litematica.verifier.VerifierRenderFilter;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
+import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
 
 @Mixin(SchematicVerifier.class)
 abstract class MixinSchematicVerifier implements GitmaticaVerifier
@@ -222,6 +223,17 @@ abstract class MixinSchematicVerifier implements GitmaticaVerifier
         }
     }
 
+    @Inject(method = "startVerification", at = @At("TAIL"))
+    private void gitmatica$restoreStructuralMismatchesAfterReset(
+            ClientLevel clientWorld,
+            WorldSchematic schematicWorld,
+            SchematicPlacement placement,
+            ICompletionListener completionListener,
+            CallbackInfo callbackInfo)
+    {
+        LvcSubRegionStructuralDiffRegistry.reapplyVerifier(placement);
+    }
+
     @Inject(method = "getSelectedMismatchPositionsForRender", at = @At("HEAD"), cancellable = true)
     private void gitmatica$filterStrongMismatchMarkers(
             CallbackInfoReturnable<List<MismatchRenderPos>> callbackInfo)
@@ -270,7 +282,10 @@ abstract class MixinSchematicVerifier implements GitmaticaVerifier
     @Inject(method = "getTotalErrors", at = @At("RETURN"), cancellable = true)
     private void gitmatica$includeInventoryErrors(CallbackInfoReturnable<Integer> callbackInfo)
     {
-        callbackInfo.setReturnValue(callbackInfo.getReturnValue() + this.gitmatica$getWrongInventories());
+        callbackInfo.setReturnValue(
+                callbackInfo.getReturnValue() +
+                this.gitmatica$getWrongInventories() +
+                this.gitmatica$getStructuralMismatchCount());
     }
 
     @Inject(method = "updateMismatchOverlays", at = @At("TAIL"))
@@ -282,13 +297,29 @@ abstract class MixinSchematicVerifier implements GitmaticaVerifier
     @Override
     public Map<BlockPos, BlockMismatch> gitmatica$getBlockMismatchesByPosition()
     {
-        return Map.copyOf(this.blockMismatches);
+        Map<BlockPos, BlockMismatch> combined = new LinkedHashMap<>(this.blockMismatches);
+        combined.putAll(this.gitmatica$state.structuralMismatches());
+        return Map.copyOf(combined);
     }
 
     @Override
     public Map<BlockPos, BlockMismatch> gitmatica$getInventoryMismatchesByPosition()
     {
         return this.gitmatica$state.inventoryMismatches();
+    }
+
+    @Override
+    public void gitmatica$setStructuralMismatches(
+            Map<BlockPos, BlockState> expectedStates)
+    {
+        this.gitmatica$state.setStructuralMismatches(expectedStates);
+        this.updateMismatchOverlays();
+    }
+
+    @Override
+    public int gitmatica$getStructuralMismatchCount()
+    {
+        return this.gitmatica$state.structuralMismatchCount();
     }
 
     @Override
@@ -329,6 +360,7 @@ abstract class MixinSchematicVerifier implements GitmaticaVerifier
             }
 
             this.gitmatica$state.rememberHiddenBlockMismatches(hidden);
+            this.gitmatica$state.hideStructuralMismatches(mismatch);
             ((SchematicVerifier) (Object) this).ignoreStateMismatch(mismatch);
         }
     }
@@ -348,6 +380,7 @@ abstract class MixinSchematicVerifier implements GitmaticaVerifier
         }
 
         this.gitmatica$state.clearHiddenBlockMismatches();
+        this.gitmatica$state.resetHiddenStructuralMismatches();
         this.gitmatica$state.restoreHiddenInventoryMismatches();
         this.updateMismatchOverlays();
         this.gitmatica$markInventoryChunksForRebuild(this.gitmatica$state.inventoryMismatches().keySet());

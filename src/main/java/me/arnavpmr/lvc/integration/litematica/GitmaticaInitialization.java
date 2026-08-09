@@ -3,6 +3,7 @@ package me.arnavpmr.lvc.integration.litematica;
 import fi.dy.masa.malilib.config.ConfigManager;
 import fi.dy.masa.malilib.event.InputEventHandler;
 import fi.dy.masa.malilib.event.RenderEventHandler;
+import fi.dy.masa.malilib.event.TickHandler;
 import fi.dy.masa.malilib.event.WorldLoadHandler;
 import fi.dy.masa.malilib.interfaces.IInitializationHandler;
 import fi.dy.masa.malilib.registry.Registry;
@@ -12,6 +13,7 @@ import me.arnavpmr.lvc.config.LvcConfigs;
 import me.arnavpmr.lvc.config.LvcInputHandler;
 import me.arnavpmr.lvc.config.LvcKeyCallbacks;
 import me.arnavpmr.lvc.gui.GuiLvcConfigs;
+import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
 
 /**
  * Owns Gitmatica's public registrations. Litematica internals are integrated
@@ -32,6 +34,8 @@ public final class GitmaticaInitialization implements IInitializationHandler
         LvcKeyCallbacks.init();
 
         RenderEventHandler.getInstance().registerInGameGuiRenderer(new GitmaticaHudRenderer());
+        TickHandler.getInstance().registerClientTickHandler(
+                LvcSubRegionStructuralDiffRegistry::onClientTick);
 
         GitmaticaWorldLoadListener worldLoadListener = new GitmaticaWorldLoadListener();
         WorldLoadHandler.getInstance().registerWorldLoadPreHandler(worldLoadListener);

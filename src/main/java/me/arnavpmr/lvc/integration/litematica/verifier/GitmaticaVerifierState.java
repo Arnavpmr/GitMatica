@@ -24,6 +24,8 @@ public final class GitmaticaVerifierState
     private final Map<BlockPos, BlockMismatch> hiddenInventoryMismatches = new LinkedHashMap<>();
     private final Map<BlockPos, BlockMismatch> hiddenBlockMismatches = new LinkedHashMap<>();
     private final Set<BlockPos> ignoredInventoryPositions = new java.util.HashSet<>();
+    private final VerifierStructuralMismatches structuralMismatches =
+            new VerifierStructuralMismatches();
     private List<MismatchRenderPos> explicitSelection = List.of();
     private boolean explicitSelectionEnabled;
     private boolean changeInfoHud;
@@ -37,6 +39,7 @@ public final class GitmaticaVerifierState
         this.hiddenInventoryMismatches.clear();
         this.hiddenBlockMismatches.clear();
         this.ignoredInventoryPositions.clear();
+        this.structuralMismatches.clearForVerifierReset();
         this.explicitSelection = List.of();
         this.explicitSelectionEnabled = false;
         this.renderFilter = VerifierRenderFilter.inactive(this.renderFilter.revision() + 1L);
@@ -120,6 +123,31 @@ public final class GitmaticaVerifierState
         return Map.copyOf(this.hiddenBlockMismatches);
     }
 
+    public void setStructuralMismatches(Map<BlockPos, BlockState> expectedStates)
+    {
+        this.structuralMismatches.setExpectedStates(expectedStates);
+    }
+
+    public Map<BlockPos, BlockMismatch> structuralMismatches()
+    {
+        return this.structuralMismatches.active();
+    }
+
+    public int structuralMismatchCount()
+    {
+        return this.structuralMismatches.activeCount();
+    }
+
+    public boolean hideStructuralMismatches(BlockMismatch mismatch)
+    {
+        return this.structuralMismatches.hide(mismatch);
+    }
+
+    public void resetHiddenStructuralMismatches()
+    {
+        this.structuralMismatches.resetHidden();
+    }
+
     public void rememberHiddenBlockMismatches(Map<BlockPos, BlockMismatch> hidden)
     {
         this.hiddenBlockMismatches.putAll(hidden);
@@ -159,7 +187,8 @@ public final class GitmaticaVerifierState
     {
         return !this.hiddenBlockMismatches.isEmpty() ||
                !this.hiddenInventoryMismatches.isEmpty() ||
-               !this.ignoredInventoryPositions.isEmpty();
+               !this.ignoredInventoryPositions.isEmpty() ||
+               this.structuralMismatches.hasHidden();
     }
 
     public void setChangeInfoHud(boolean enabled)

@@ -16,5 +16,6 @@ final class LvcSemanticStorageIntegrationTest
         LvcSemanticSchematicIntegrationTest.runAll();
         LvcRemoteSparsePlannerIntegrationTest.runAll();
         LvcRetiredCoverageIntegrationTest.runAll();
+        LvcSubRegionStructuralDiffIntegrationTest.runAll();
     }
 }

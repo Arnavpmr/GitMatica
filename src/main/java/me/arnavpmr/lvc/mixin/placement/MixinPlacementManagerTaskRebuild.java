@@ -28,6 +28,7 @@ import fi.dy.masa.litematica.world.WorldSchematic;
 import fi.dy.masa.litematica.util.WorldUtils;
 import me.arnavpmr.lvc.integration.litematica.placement.GitmaticaPlacementDaemon;
 import me.arnavpmr.lvc.integration.litematica.placement.GitmaticaPlacementTaskContext;
+import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
 
 /**
  * Prevents a delayed rebuild from publishing a chunk assembled from placements
@@ -56,7 +57,13 @@ abstract class MixinPlacementManagerTaskRebuild
                 return;
             }
 
-            if (this.gitmatica$activePlacements(manager).isEmpty())
+            boolean structuralCoverage =
+                    LvcSubRegionStructuralDiffRegistry.hasRetiredBlocksInChunk(
+                            this.gitmatica$task().gitmatica$chunkX(),
+                            this.gitmatica$task().gitmatica$chunkZ());
+
+            if (this.gitmatica$activePlacements(manager).isEmpty() &&
+                    !structuralCoverage)
             {
                 this.gitmatica$unloadStaleChunk(schematicWorld);
                 return;
@@ -101,7 +108,18 @@ abstract class MixinPlacementManagerTaskRebuild
 
                     if (currentPlacements.isEmpty())
                     {
-                        this.gitmatica$unloadStaleChunk(schematicWorld);
+                        if (LvcSubRegionStructuralDiffRegistry.hasRetiredBlocksInChunk(
+                                this.gitmatica$task().gitmatica$chunkX(),
+                                this.gitmatica$task().gitmatica$chunkZ()))
+                        {
+                            manager.markChunkForRebuild(
+                                    this.gitmatica$task().gitmatica$chunkX(),
+                                    this.gitmatica$task().gitmatica$chunkZ());
+                        }
+                        else
+                        {
+                            this.gitmatica$unloadStaleChunk(schematicWorld);
+                        }
                     }
                     else
                     {
@@ -115,6 +133,14 @@ abstract class MixinPlacementManagerTaskRebuild
                 schematicWorld.getChunkSource().replaceChunk(
                         this.gitmatica$task().gitmatica$chunkX(), this.gitmatica$task().gitmatica$chunkZ(), protoChunk.getWrapped());
                 protoChunk.spawnAllEntitiesNow(schematicWorld);
+            }
+            else if (!LvcSubRegionStructuralDiffRegistry.hasRetiredBlocksInChunk(
+                    this.gitmatica$task().gitmatica$chunkX(),
+                    this.gitmatica$task().gitmatica$chunkZ()))
+            {
+                protoChunk.clear();
+                this.gitmatica$unloadStaleChunk(schematicWorld);
+                return;
             }
 
             protoChunk.clear();

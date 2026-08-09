@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.Map;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.state.BlockState;
 
 import fi.dy.masa.litematica.schematic.verifier.SchematicVerifier.BlockMismatch;
 import fi.dy.masa.litematica.schematic.verifier.SchematicVerifier.MismatchRenderPos;
@@ -17,6 +18,10 @@ public interface GitmaticaVerifier
     Map<BlockPos, BlockMismatch> gitmatica$getBlockMismatchesByPosition();
 
     Map<BlockPos, BlockMismatch> gitmatica$getInventoryMismatchesByPosition();
+
+    void gitmatica$setStructuralMismatches(Map<BlockPos, BlockState> expectedStates);
+
+    int gitmatica$getStructuralMismatchCount();
 
     int gitmatica$getWrongInventories();
 

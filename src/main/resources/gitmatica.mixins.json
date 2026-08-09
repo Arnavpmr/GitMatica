@@ -25,6 +25,7 @@
     "network.MixinServuxLitematicaHandler",
     "placement.MixinPlacementManagerTask",
     "placement.MixinPlacementManagerTaskRebuild",
+    "placement.MixinSchematicPlacementManager",
     "render.MixinChunkRendererSchematicVbo",
     "render.MixinOverlayRenderer",
     "render.MixinWorldRendererSchematic",

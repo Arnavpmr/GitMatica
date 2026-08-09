@@ -122,6 +122,7 @@ public final class LvcTrackingOverlayService
     private static void removeTrackingOverlay(Path repositoryDirectory, boolean preserveOriginCache)
     {
         Objects.requireNonNull(repositoryDirectory, "repositoryDirectory");
+        LvcSubRegionStructuralDiffRegistry.removeRepository(repositoryDirectory);
 
         if (preserveOriginCache)
         {
@@ -175,7 +176,8 @@ public final class LvcTrackingOverlayService
         String siteId = LvcSemanticRepository.defaultSiteId(manifest);
         LvcManifest.Site site = manifest.site(siteId);
 
-        if (!isSemanticTrackingCacheCurrent(repositoryDirectory))
+        if (!isSemanticTrackingCacheCurrent(repositoryDirectory) ||
+                LvcSubRegionStructuralDiffRegistry.requiresOverlayRebuild(repositoryDirectory))
         {
             return null;
         }
@@ -246,9 +248,11 @@ public final class LvcTrackingOverlayService
                                                                              @Nullable ICompletionListener completionListener) throws IOException
     {
         Objects.requireNonNull(repositoryDirectory, "repositoryDirectory");
+
         OverlayTarget target = currentOverlayTarget(repositoryDirectory);
 
-        if (target == null)
+        if (target == null ||
+                LvcSubRegionStructuralDiffRegistry.requiresOverlayRebuild(repositoryDirectory))
         {
             return null;
         }
