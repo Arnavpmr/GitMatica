@@ -124,33 +124,6 @@ public final class LvcSubRegionEditSession
         }
     }
 
-    /**
-     * Returns whether the transient box differs from the bounds last applied to
-     * the working manifest. Rendering uses this to keep native selection
-     * styling for a draft without obscuring an applied structural status.
-     */
-    public static boolean isCurrentDraftPending()
-    {
-        ActiveEdit edit = activeEdit;
-
-        if (edit == null || !LvcToolModes.isEditSubregionsActive())
-        {
-            return false;
-        }
-
-        try
-        {
-            LvcTransientSubRegionSelection.Bounds current =
-                    LvcTransientSubRegionSelection.relativeBounds(
-                            edit.selection(), edit.placement().getOrigin());
-            return !current.equals(edit.appliedBounds());
-        }
-        catch (RuntimeException ignored)
-        {
-            return true;
-        }
-    }
-
     public static boolean selectOtherSubRegionAtCrosshair(int maxDistance)
     {
         if (!LvcToolModes.isEditSubregionsActive())
@@ -206,16 +179,12 @@ public final class LvcSubRegionEditSession
                     region,
                     overlay.placement().getOrigin()
             );
-            LvcTransientSubRegionSelection.Bounds appliedBounds =
-                    LvcTransientSubRegionSelection.relativeBounds(
-                            selection, overlay.placement().getOrigin());
             activeEdit = new ActiveEdit(
                     overlay.repositoryDirectory(),
                     overlay.placement(),
                     state.projectName(),
                     region.name(),
-                    selection,
-                    appliedBounds
+                    selection
             );
             return selection;
         }
@@ -345,8 +314,7 @@ public final class LvcSubRegionEditSession
             SchematicPlacement placement,
             String projectName,
             String regionName,
-            AreaSelection selection,
-            LvcTransientSubRegionSelection.Bounds appliedBounds)
+            AreaSelection selection)
     {
         private boolean matches(SelectedOverlay overlay, String selectedRegion)
         {

@@ -18,8 +18,6 @@ import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
 import fi.dy.masa.litematica.schematic.verifier.SchematicVerifier.MismatchType;
 import fi.dy.masa.litematica.selection.Box;
 import fi.dy.masa.malilib.util.data.Color4f;
-import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
-import me.arnavpmr.lvc.integration.litematica.tool.LvcToolModes;
 import me.arnavpmr.lvc.overlay.LvcBlockInspectionPolicy;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralBoundsRenderer;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
@@ -28,7 +26,7 @@ import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
 @Mixin(OverlayRenderer.class)
 abstract class MixinOverlayRenderer
 {
-    @Inject(method = "renderBoxes", at = @At("TAIL"))
+    @Inject(method = "renderBoxes", at = @At("HEAD"))
     private void gitmatica$renderStructuralBounds(CallbackInfo callbackInfo)
     {
         LvcSubRegionStructuralBoundsRenderer.render();
@@ -44,11 +42,6 @@ abstract class MixinOverlayRenderer
             SchematicPlacement placement,
             CallbackInfo callbackInfo)
     {
-        if (!LvcToolModes.isEditSubregionsActive())
-        {
-            return;
-        }
-
         SchematicPlacement selected = DataManager.getSchematicPlacementManager()
                 .getSelectedSchematicPlacement();
         SchematicPlacement target = placement != null ? placement : selected;
@@ -66,10 +59,8 @@ abstract class MixinOverlayRenderer
             return;
         }
 
-        boolean areaBox = boxType == BoxType.AREA_SELECTED ||
-                boxType == BoxType.AREA_UNSELECTED;
-
-        if (!areaBox || !LvcSubRegionEditSession.isCurrentDraftPending())
+        if (boxType == BoxType.PLACEMENT_SELECTED ||
+                boxType == BoxType.PLACEMENT_UNSELECTED)
         {
             callbackInfo.cancel();
         }

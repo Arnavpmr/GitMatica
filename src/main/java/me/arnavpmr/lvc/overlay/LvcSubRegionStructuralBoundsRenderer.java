@@ -8,9 +8,8 @@ import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.malilib.render.RenderUtils;
 import fi.dy.masa.malilib.util.data.Color4f;
 import me.arnavpmr.lvc.diff.LvcSubRegionStructuralDiff.BoundsStatus;
-import me.arnavpmr.lvc.integration.litematica.tool.LvcToolModes;
 
-/** Renders applied HEAD-to-working subregion bounds in Tool Mode 10. */
+/** Renders applied HEAD-to-working subregion bounds in every tool mode. */
 public final class LvcSubRegionStructuralBoundsRenderer
 {
     private static final float EXPAND = 0.001f;
@@ -26,8 +25,7 @@ public final class LvcSubRegionStructuralBoundsRenderer
 
     public static void render()
     {
-        if (!LvcToolModes.isEditSubregionsActive() ||
-                !Configs.Visuals.ENABLE_PLACEMENT_BOXES_RENDERING.getBooleanValue())
+        if (!Configs.Visuals.ENABLE_PLACEMENT_BOXES_RENDERING.getBooleanValue())
         {
             return;
         }

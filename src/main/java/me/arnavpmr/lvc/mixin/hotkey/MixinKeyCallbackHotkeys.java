@@ -21,11 +21,19 @@ import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
 abstract class MixinKeyCallbackHotkeys
 {
     @Inject(method = "onKeyAction", at = @At("HEAD"), cancellable = true)
-    private void gitmatica$openChangeViewerForTrackingPlacement(
+    private void gitmatica$handleTrackingHotkeys(
             KeyAction action,
             IKeybind key,
             CallbackInfoReturnable<Boolean> callbackInfo)
     {
+        if (LvcToolModes.isEditSubregionsActive() &&
+                key == Hotkeys.EXECUTE_OPERATION.getKeybind() &&
+                LvcSubRegionEditSession.applyCurrentBounds())
+        {
+            callbackInfo.setReturnValue(true);
+            return;
+        }
+
         if (LvcToolModes.isEditSubregionsActive() &&
                 key == Hotkeys.TOOL_SELECT_ELEMENTS.getKeybind() &&
                 LvcSubRegionEditSession.selectOtherSubRegionAtCrosshair(200))
