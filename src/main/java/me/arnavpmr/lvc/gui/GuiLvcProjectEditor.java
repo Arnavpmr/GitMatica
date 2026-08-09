@@ -663,8 +663,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
 
         private boolean isEnabled()
         {
-            return this != CHANGE_SELECTION_MODE &&
-                    this != CHANGE_CORNER_MODE;
+            return this != CHANGE_SELECTION_MODE;
         }
     }
 
@@ -679,6 +678,12 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
                 case SAVE_VERSION -> this.gui.subRegionWorkflow.promptSaveVersion();
                 case ANALYZE_AREA -> this.gui.subRegionWorkflow.analyzeArea();
                 case SET_ORIGIN_TO_PLAYER -> this.gui.setOriginToPlayer();
+                case CHANGE_CORNER_MODE ->
+                {
+                    Configs.Generic.SELECTION_CORNERS_MODE.setOptionListValue(
+                            Configs.Generic.SELECTION_CORNERS_MODE.getOptionListValue().cycle(false));
+                    this.gui.initGui();
+                }
                 case MANUAL_ORIGIN -> this.gui.setSavedStatus("gitmatica.message.lvc_project_editor.metadata_locked");
                 case PROJECT_MANAGER -> this.gui.openProjectManager();
                 case LITEMATICA_MENU -> this.gui.openLitematicaMenu();

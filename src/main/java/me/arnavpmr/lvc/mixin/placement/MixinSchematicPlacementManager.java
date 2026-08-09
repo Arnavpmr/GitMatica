@@ -25,4 +25,17 @@ abstract class MixinSchematicPlacementManager
                     .markChunkForRebuild(chunkX, chunkZ);
         }
     }
+
+    @Inject(method = "markChunkForUnload(II)V", at = @At("HEAD"), cancellable = true)
+    private void gitmatica$keepRetiredStructuralChunkLoaded(
+            int chunkX,
+            int chunkZ,
+            CallbackInfo callbackInfo)
+    {
+        if (LvcSubRegionStructuralDiffRegistry.hasRetiredBlocksInChunk(
+                chunkX, chunkZ))
+        {
+            callbackInfo.cancel();
+        }
+    }
 }
