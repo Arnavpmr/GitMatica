@@ -47,6 +47,7 @@ public final class LvcTaskEpochAssertions
     {
         assertWorldBound(LvcSparseCommandPasteTask.class);
         assertWorldBound(LvcAuthoritativeClientSyncTask.class);
+        assertWorldBound(LvcSubRegionStructuralDiffRestoreTask.class);
     }
 
     private static void assertWorldBound(Class<?> taskClass)

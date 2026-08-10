@@ -22,17 +22,20 @@ public final class LvcSubRegionStructuralDiffLoader implements AutoCloseable
     private final Git git;
     private final RevWalk walk;
     private final RevCommit head;
+    private final String workingDefinitionId;
     private final LvcSubRegionStructuralDiff.BuildSession session;
 
     private LvcSubRegionStructuralDiffLoader(
             Git git,
             RevWalk walk,
             RevCommit head,
+            String workingDefinitionId,
             LvcSubRegionStructuralDiff.BuildSession session)
     {
         this.git = git;
         this.walk = walk;
         this.head = head;
+        this.workingDefinitionId = workingDefinitionId;
         this.session = session;
     }
 
@@ -66,7 +69,12 @@ public final class LvcSubRegionStructuralDiffLoader implements AutoCloseable
                             working.site(siteId),
                             objectId -> readCommittedObject(repository, head, objectId)
                     );
-            return new LvcSubRegionStructuralDiffLoader(git, walk, head, session);
+            return new LvcSubRegionStructuralDiffLoader(
+                    git,
+                    walk,
+                    head,
+                    LvcSemanticRepository.trackingOverlayDefinitionId(working),
+                    session);
         }
         catch (Exception e)
         {
@@ -119,6 +127,11 @@ public final class LvcSubRegionStructuralDiffLoader implements AutoCloseable
     public String headCommitId()
     {
         return this.head.getName();
+    }
+
+    public String workingDefinitionId()
+    {
+        return this.workingDefinitionId;
     }
 
     @Override
