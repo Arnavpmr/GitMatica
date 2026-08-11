@@ -21,15 +21,19 @@ import fi.dy.masa.malilib.util.StringUtils;
 final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
 {
     @FunctionalInterface
-    interface BoundsSaveAction
+    interface RegionSaveAction
     {
-        boolean save(BlockPos min, BlockPos size);
+        boolean save(String name, BlockPos min, BlockPos size);
     }
 
     private static final int MIN_DIALOG_WIDTH = 236;
-    private static final int DIALOG_HEIGHT = 160;
+    private static final int DIALOG_HEIGHT = 202;
     private static final int PADDING = 10;
-    private static final int COORDINATE_TOP = 36;
+    private static final int NAME_LABEL_TOP = 27;
+    private static final int NAME_FIELD_TOP = 38;
+    private static final int ERROR_TOP = 56;
+    private static final int CORNER_LABEL_TOP = 66;
+    private static final int COORDINATE_TOP = 78;
     private static final int AXIS_LABEL_WIDTH = 12;
     private static final int FIELD_WIDTH = 68;
     private static final int FIELD_HEIGHT = 16;
@@ -47,22 +51,19 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
 
     private final LvcManifest.Region region;
     private final BlockPos placementOrigin;
-    private final BoundsSaveAction saveAction;
+    private final RegionSaveAction saveAction;
+    private GuiTextFieldGeneric nameField;
     private final GuiTextFieldInteger[] firstCornerFields = new GuiTextFieldInteger[3];
     private final GuiTextFieldInteger[] secondCornerFields = new GuiTextFieldInteger[3];
-    private BlockPos appliedMin;
-    private BlockPos appliedSize;
     private String errorMessage = "";
     private boolean handled;
 
     GuiLvcProjectSubRegionDialog(Screen parent, LvcManifest.Region region, BlockPos placementOrigin,
-                                 BoundsSaveAction saveAction)
+                                 RegionSaveAction saveAction)
     {
         this.region = region;
         this.placementOrigin = placementOrigin;
         this.saveAction = saveAction;
-        this.appliedMin = positionFromList(region.min());
-        this.appliedSize = positionFromList(region.size());
         this.setParent(parent);
         this.title = StringUtils.translate("gitmatica.gui.title.lvc_project_editor.configure_sub_region", region.name());
         this.useTitleHierarchy = false;
@@ -77,6 +78,7 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
         int maxWidth = Math.max(MIN_DIALOG_WIDTH, this.getScreenWidth() - PADDING * 2);
         this.setWidthAndHeight(Math.min(maxWidth, Math.max(MIN_DIALOG_WIDTH, titleWidth)), DIALOG_HEIGHT);
         this.centerOnScreen();
+        this.createNameField();
         this.createCoordinateFields(
                 this.firstCornerFields, this.region.min(), this.dialogLeft + PADDING);
         this.createCoordinateFields(
@@ -84,6 +86,20 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
         this.createMoveToPlayerButton(this.firstCornerFields, this.dialogLeft + PADDING);
         this.createMoveToPlayerButton(this.secondCornerFields, this.getSecondCornerColumnX());
         this.createButtons();
+    }
+
+    private void createNameField()
+    {
+        this.nameField = new GuiTextFieldGeneric(
+                this.dialogLeft + PADDING,
+                this.dialogTop + NAME_FIELD_TOP,
+                this.dialogWidth - PADDING * 2,
+                FIELD_HEIGHT,
+                this.font
+        );
+        this.nameField.setMaxLength(128);
+        this.nameField.setValueWrapper(this.region.name());
+        this.addTextField(this.nameField, ignored -> false);
     }
 
     private void createCoordinateFields(GuiTextFieldInteger[] fields, List<Integer> values, int x)
@@ -117,16 +133,21 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
 
     private void createButtons()
     {
-        String save = StringUtils.translate("gitmatica.gui.button.lvc_project.save");
+        String apply = StringUtils.translate("gitmatica.gui.button.lvc_project_editor.apply");
+        String discard = StringUtils.translate("gitmatica.gui.button.lvc_project_editor.discard");
         String cancel = StringUtils.translate("malilib.gui.button.cancel");
-        int saveWidth = Math.max(44, this.getStringWidth(save) + 14);
+        int applyWidth = Math.max(44, this.getStringWidth(apply) + 14);
+        int discardWidth = Math.max(44, this.getStringWidth(discard) + 14);
         int cancelWidth = Math.max(44, this.getStringWidth(cancel) + 14);
         int x = this.dialogLeft + PADDING;
         int y = this.dialogTop + this.dialogHeight - PADDING - BUTTON_HEIGHT;
 
-        this.addButton(new ButtonGeneric(x, y, saveWidth, BUTTON_HEIGHT, save),
-                (button, mouseButton) -> this.save());
-        x += saveWidth + 4;
+        this.addButton(new ButtonGeneric(x, y, applyWidth, BUTTON_HEIGHT, apply),
+                (button, mouseButton) -> this.apply());
+        x += applyWidth + 4;
+        this.addButton(new ButtonGeneric(x, y, discardWidth, BUTTON_HEIGHT, discard),
+                (button, mouseButton) -> this.discard());
+        x += discardWidth + 4;
         this.addButton(new ButtonGeneric(x, y, cancelWidth, BUTTON_HEIGHT, cancel),
                 (button, mouseButton) -> this.cancel());
     }
@@ -225,19 +246,20 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
         RenderUtils.drawOutlinedBox(ctx, this.dialogLeft, this.dialogTop, this.dialogWidth, this.dialogHeight,
                 0xE0000000, COLOR_HORIZONTAL_BAR);
         this.drawStringWithShadow(ctx, this.getTitleString(), this.dialogLeft + PADDING, this.dialogTop + 7, COLOR_WHITE);
-        if (this.errorMessage.isBlank())
+        this.drawStringWithShadow(ctx,
+                StringUtils.translate("gitmatica.gui.label.lvc_project_editor.sub_region_name"),
+                this.dialogLeft + PADDING,
+                this.dialogTop + NAME_LABEL_TOP,
+                COLOR_WHITE);
+        this.drawColumn(ctx, this.dialogLeft + PADDING,
+                StringUtils.translate("litematica.gui.label.area_editor.corner_1"));
+        this.drawColumn(ctx, this.getSecondCornerColumnX(),
+                StringUtils.translate("litematica.gui.label.area_editor.corner_2"));
+
+        if (!this.errorMessage.isBlank())
         {
-            this.drawColumn(ctx, this.dialogLeft + PADDING,
-                    StringUtils.translate("gitmatica.gui.label.lvc_project_editor.region_x1"));
-            this.drawColumn(ctx, this.getSecondCornerColumnX(),
-                    StringUtils.translate("gitmatica.gui.label.lvc_project_editor.region_x2"));
-        }
-        else
-        {
-            this.drawColumn(ctx, this.dialogLeft + PADDING, "");
-            this.drawColumn(ctx, this.getSecondCornerColumnX(), "");
             this.drawStringWithShadow(ctx, this.errorMessage, this.dialogLeft + PADDING,
-                    this.dialogTop + 24, 0xFFFF5555);
+                    this.dialogTop + ERROR_TOP, 0xFFFF5555);
         }
 
         super.drawTextFields(ctx, mouseX, mouseY);
@@ -253,10 +275,10 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
     {
         if (!title.isBlank())
         {
-            this.drawStringWithShadow(ctx, title, x, this.dialogTop + 24, 0xFFAAAAAA);
+            this.drawStringWithShadow(ctx, title, x, this.dialogTop + CORNER_LABEL_TOP, 0xFFAAAAAA);
         }
 
-        int y = this.dialogTop + 40;
+        int y = this.dialogTop + COORDINATE_TOP + 4;
 
         for (String axis : List.of("X:", "Y:", "Z:"))
         {
@@ -265,39 +287,49 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
         }
     }
 
-    private void save()
+    private void apply()
     {
         if (this.handled)
         {
             return;
         }
 
-        if (this.applyCurrentBounds())
+        if (this.applyCurrentDefinition())
         {
             this.handled = true;
             this.closeGui(true);
         }
     }
 
-    private boolean applyCurrentBounds()
+    private boolean applyCurrentDefinition()
     {
         try
         {
+            String name = this.nameField.getValueWrapper().trim();
+
+            if (name.isBlank())
+            {
+                this.errorMessage = StringUtils.translate(
+                        "gitmatica.error.lvc_project_editor.region_name_required");
+                this.nameField.setFocused(true);
+                return false;
+            }
+
             BlockPos firstCorner = readPosition(this.firstCornerFields);
             BlockPos secondCorner = readPosition(this.secondCornerFields);
             BlockPos min = PositionUtils.getMinCorner(firstCorner, secondCorner);
             BlockPos max = PositionUtils.getMaxCorner(firstCorner, secondCorner);
             BlockPos size = max.subtract(min).offset(1, 1, 1);
+            BlockPos initialMin = positionFromList(this.region.min());
+            BlockPos initialSize = positionFromList(this.region.size());
 
-            if (min.equals(this.appliedMin) && size.equals(this.appliedSize))
+            if (name.equals(this.region.name()) && min.equals(initialMin) && size.equals(initialSize))
             {
                 return true;
             }
 
-            if (this.saveAction.save(min, size))
+            if (this.saveAction.save(name, min, size))
             {
-                this.appliedMin = min;
-                this.appliedSize = size;
                 return true;
             }
         }
@@ -307,6 +339,15 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
         }
 
         return false;
+    }
+
+    private void discard()
+    {
+        this.nameField.setValueWrapper(this.region.name());
+        this.setCoordinateFields(this.firstCornerFields, this.region.min());
+        this.setCoordinateFields(this.secondCornerFields, secondCorner(this.region));
+        this.nameField.setFocused(false);
+        this.errorMessage = "";
     }
 
     private void cancel()
@@ -325,6 +366,15 @@ final class GuiLvcProjectSubRegionDialog extends GuiDialogBase
                 Integer.parseInt(fields[1].getValueWrapper().trim()),
                 Integer.parseInt(fields[2].getValueWrapper().trim())
         );
+    }
+
+    private void setCoordinateFields(GuiTextFieldInteger[] fields, List<Integer> values)
+    {
+        for (int index = 0; index < fields.length; index++)
+        {
+            fields[index].setValueWrapper(String.valueOf(values.get(index)));
+            fields[index].setFocused(false);
+        }
     }
 
     private static List<Integer> secondCorner(LvcManifest.Region region)

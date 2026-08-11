@@ -56,25 +56,8 @@ public final class LvcSubRegionEditorWorkflow
                 "gitmatica.gui.title.lvc_project_editor.new_sub_region",
                 "",
                 this.gui,
-                value -> this.validateName(null, value),
+                this::validateNewRegionName,
                 (java.util.function.Consumer<String>) this::createRegion
-        ));
-    }
-
-    void promptRenameRegion(LvcManifest.Region region)
-    {
-        if (!this.canEdit())
-        {
-            return;
-        }
-
-        GuiBase.openGui(new GuiLvcTextInputDialog(
-                128,
-                "gitmatica.gui.title.lvc_project_editor.rename_sub_region",
-                region.name(),
-                this.gui,
-                value -> this.validateName(region.name(), value),
-                (java.util.function.Consumer<String>) value -> this.renameRegion(region.name(), value)
         ));
     }
 
@@ -97,7 +80,7 @@ public final class LvcSubRegionEditorWorkflow
                 this.gui,
                 region,
                 state.placementOrigin(),
-                (min, size) -> this.updateRegionBounds(region.name(), min, size)
+                (name, min, size) -> this.updateRegion(region.name(), name, min, size)
         ));
     }
 
@@ -154,20 +137,6 @@ public final class LvcSubRegionEditorWorkflow
         materialList.reCreateMaterialList();
     }
 
-    void promptSaveVersion()
-    {
-        LvcProjectEditorState state = this.gui.getEditorState();
-
-        if (state == null || state.regions().isEmpty())
-        {
-            LvcGuiMessages.show(MessageType.ERROR, "gitmatica.error.lvc_project.no_tracking_areas");
-            return;
-        }
-
-        GuiLvcProjectManager.openSaveVersionFromCurrentScreen(
-                this.repositoryDirectory, state.projectName());
-    }
-
     private void createRegion(String name)
     {
         LvcProjectEditorState state = this.gui.getEditorState();
@@ -219,31 +188,7 @@ public final class LvcSubRegionEditorWorkflow
         }
     }
 
-    private void renameRegion(String currentName, String name)
-    {
-        LvcManifest.Region region = this.regionByName(currentName);
-
-        if (!this.canEdit() || region == null)
-        {
-            return;
-        }
-
-        try
-        {
-            LvcSemanticProjectEditor.updateRegion(this.repositoryDirectory, currentName, name,
-                    position(region.min()), position(region.size()));
-            this.gui.selectRegion(name.trim());
-            this.refreshAfterDefinitionChange();
-            LvcGuiMessages.show(MessageType.SUCCESS,
-                    "gitmatica.message.lvc_project_editor.region_renamed", name.trim());
-        }
-        catch (Exception e)
-        {
-            this.showSaveError(e);
-        }
-    }
-
-    private boolean updateRegionBounds(String regionName, BlockPos min, BlockPos size)
+    private boolean updateRegion(String currentName, String name, BlockPos min, BlockPos size)
     {
         if (!this.canEdit())
         {
@@ -252,8 +197,10 @@ public final class LvcSubRegionEditorWorkflow
 
         try
         {
-            LvcSemanticProjectEditor.updateRegion(
-                    this.repositoryDirectory, regionName, regionName, min, size);
+            String normalizedName = name.trim();
+            LvcSemanticProjectEditor.updateRegionDefinition(
+                    this.repositoryDirectory, currentName, normalizedName, min, size);
+            this.gui.selectRegion(normalizedName);
             this.refreshAfterDefinitionChange();
             LvcGuiMessages.show(MessageType.SUCCESS,
                     "gitmatica.message.lvc_project_editor.region_updated");
@@ -306,7 +253,7 @@ public final class LvcSubRegionEditorWorkflow
     }
 
     @Nullable
-    private String validateName(@Nullable String editedName, String value)
+    private String validateNewRegionName(String value)
     {
         if (value == null || value.isBlank())
         {
@@ -316,23 +263,13 @@ public final class LvcSubRegionEditorWorkflow
         LvcProjectEditorState state = this.gui.getEditorState();
 
         if (state != null && state.regions().stream().anyMatch(region ->
-                !region.name().equals(editedName) && region.name().equals(value.trim())))
+                region.name().equals(value.trim())))
         {
             return StringUtils.translate(
                     "gitmatica.error.lvc_project_editor.region_name_duplicate", value.trim());
         }
 
         return null;
-    }
-
-    @Nullable
-    private LvcManifest.Region regionByName(String name)
-    {
-        LvcProjectEditorState state = this.gui.getEditorState();
-        return state == null ? null : state.regions().stream()
-                .filter(region -> region.name().equals(name))
-                .findFirst()
-                .orElse(null);
     }
 
     private void showSaveError(Exception error)
@@ -359,14 +296,22 @@ public final class LvcSubRegionEditorWorkflow
 
         GuiBase.openGui(new GuiLvcProjectSubRegionDialog(
                 GuiUtils.getCurrentScreen(), selected, state.placementOrigin(),
-                (min, size) -> applyRegionBounds(
-                        repositoryDirectory, state.projectName(), selected.name(), min, size)
+                (name, min, size) -> applyRegionDefinition(
+                        repositoryDirectory, state.projectName(), selected.name(), name, min, size)
         ));
         return true;
     }
 
     public static boolean applyRegionBounds(Path repositoryDirectory, String projectName,
                                             String regionName, BlockPos min, BlockPos size)
+    {
+        return applyRegionDefinition(
+                repositoryDirectory, projectName, regionName, regionName, min, size);
+    }
+
+    private static boolean applyRegionDefinition(Path repositoryDirectory, String projectName,
+                                                 String currentName, String name,
+                                                 BlockPos min, BlockPos size)
     {
         if (LvcTaskRegistry.hasActiveOperation())
         {
@@ -377,8 +322,10 @@ public final class LvcSubRegionEditorWorkflow
 
         try
         {
-            LvcSemanticProjectEditor.updateRegion(repositoryDirectory, regionName, regionName, min, size);
-            LvcTrackingSubRegionSelection.set(repositoryDirectory, regionName);
+            String normalizedName = name.trim();
+            LvcSemanticProjectEditor.updateRegionDefinition(
+                    repositoryDirectory, currentName, normalizedName, min, size);
+            LvcTrackingSubRegionSelection.set(repositoryDirectory, normalizedName);
             refreshTrackingOverlayFromWorkingTree(repositoryDirectory, projectName);
             LvcGuiMessages.show(MessageType.SUCCESS,
                     "gitmatica.message.lvc_project_editor.region_updated");

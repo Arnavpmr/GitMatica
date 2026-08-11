@@ -34,7 +34,6 @@ public class WidgetLvcProjectSubRegion extends WidgetListEntryBase<LvcManifest.R
         int posY = y + 1;
 
         posX = this.createButton(posX, posY, ButtonType.REMOVE);
-        posX = this.createButton(posX, posY, ButtonType.RENAME);
         posX = this.createButton(posX, posY, ButtonType.CONFIGURE);
 
         this.buttonsStartX = posX;
@@ -109,7 +108,6 @@ public class WidgetLvcProjectSubRegion extends WidgetListEntryBase<LvcManifest.R
 
     private enum ButtonType
     {
-        RENAME("litematica.gui.button.rename"),
         CONFIGURE("litematica.gui.button.configure"),
         REMOVE(GuiBase.TXT_RED + "-");
 
@@ -140,7 +138,6 @@ public class WidgetLvcProjectSubRegion extends WidgetListEntryBase<LvcManifest.R
             switch (this.type)
             {
                 case CONFIGURE -> this.widget.parent.getEditorGui().openRegionEditor(this.widget.entry);
-                case RENAME -> this.widget.parent.getEditorGui().promptRenameRegion(this.widget.entry);
                 case REMOVE -> this.widget.parent.getEditorGui().confirmDeleteRegion(this.widget.entry);
             }
         }

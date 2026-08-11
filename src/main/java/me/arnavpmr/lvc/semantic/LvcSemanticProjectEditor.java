@@ -59,8 +59,8 @@ public final class LvcSemanticProjectEditor
         return true;
     }
 
-    public static void updateRegion(Path repositoryDirectory, String currentName, String name,
-                                    BlockPos min, BlockPos size) throws IOException
+    public static void updateRegionDefinition(Path repositoryDirectory, String currentName,
+                                              String name, BlockPos min, BlockPos size) throws IOException
     {
         Objects.requireNonNull(currentName, "currentName");
         Objects.requireNonNull(name, "name");
@@ -73,7 +73,8 @@ public final class LvcSemanticProjectEditor
         }
 
         ActiveSemanticProject project = readActiveProject(repositoryDirectory);
-        validateUniqueRegionName(project.site().regions(), currentName, name);
+        String normalizedName = name.trim();
+        validateUniqueRegionName(project.site().regions(), currentName, normalizedName);
         List<LvcManifest.Region> regions = new ArrayList<>(project.site().regions().size());
         boolean replaced = false;
 
@@ -81,7 +82,7 @@ public final class LvcSemanticProjectEditor
         {
             if (region.name().equals(currentName))
             {
-                regions.add(new LvcManifest.Region(name.trim(), blockPosToList(min), blockPosToList(size)));
+                regions.add(new LvcManifest.Region(normalizedName, blockPosToList(min), blockPosToList(size)));
                 replaced = true;
             }
             else

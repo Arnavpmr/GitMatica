@@ -81,13 +81,6 @@ public class GuiLvcProjectManager
         this.updateTitle();
     }
 
-    static void openSaveVersionFromCurrentScreen(Path repositoryDirectory, String projectName)
-    {
-        GuiLvcProjectManager operationHost = new GuiLvcProjectManager(repositoryDirectory, projectName);
-        operationHost.initialOverlayAttempted = true;
-        operationHost.handleHotkeyAction(GuiLvcProjectButtonType.SAVE_VERSION);
-    }
-
     void handleHotkeyAction(GuiLvcProjectButtonType action)
     {
         if (this.controller.prepareHotkeyAction())

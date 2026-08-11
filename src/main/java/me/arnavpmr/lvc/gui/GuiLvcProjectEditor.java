@@ -246,7 +246,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         y = this.getActionButtonY();
         x = TOP_BUTTON_X;
         x = this.createWrappedButton(x, y, TOP_BUTTON_X, this.getScreenWidth() - MARGIN, ButtonType.NEW_SUB_REGION);
-        x = this.createWrappedButton(x + BUTTON_GROUP_GAP, y, TOP_BUTTON_X, this.getScreenWidth() - MARGIN, ButtonType.SAVE_VERSION);
         this.createManualOriginButton(x + BUTTON_GROUP_GAP, y);
     }
 
@@ -529,8 +528,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         return TOP_BUTTON_X +
                 this.getButtonWidth(ButtonType.NEW_SUB_REGION) +
                 BUTTON_GROUP_GAP +
-                this.getButtonWidth(ButtonType.SAVE_VERSION) +
-                BUTTON_GROUP_GAP +
                 this.getButtonWidth(ButtonType.MANUAL_ORIGIN) / 2;
     }
 
@@ -545,7 +542,8 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
 
     private int getActionButtonGroupWidth()
     {
-        return this.getButtonWidth(ButtonType.NEW_SUB_REGION) + BUTTON_GROUP_GAP + this.getButtonWidth(ButtonType.SAVE_VERSION) + BUTTON_GROUP_GAP + this.getButtonWidth(ButtonType.MANUAL_ORIGIN);
+        return this.getButtonWidth(ButtonType.NEW_SUB_REGION) + BUTTON_GROUP_GAP +
+                this.getButtonWidth(ButtonType.MANUAL_ORIGIN);
     }
 
     private int getSelectionButtonGroupWidth()
@@ -607,11 +605,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         LvcTrackingSubRegionSelection.set(this.repositoryDirectory, regionName);
     }
 
-    public void promptRenameRegion(LvcManifest.Region region)
-    {
-        this.subRegionWorkflow.promptRenameRegion(region);
-    }
-
     public void openRegionEditor(LvcManifest.Region region)
     {
         this.subRegionWorkflow.openRegionEditor(region);
@@ -627,7 +620,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         CHANGE_SELECTION_MODE("litematica.gui.button.area_editor.change_selection_mode"),
         CHANGE_CORNER_MODE("litematica.gui.button.area_editor.change_corner_mode"),
         NEW_SUB_REGION("gitmatica.gui.button.lvc_project_editor.new_sub_region"),
-        SAVE_VERSION("gitmatica.gui.button.lvc_project.save_version"),
         MANUAL_ORIGIN("gitmatica.gui.button.lvc_project_editor.manual_origin"),
         SET_ORIGIN_TO_PLAYER("litematica.gui.button.move_to_player"),
         ANALYZE_AREA("litematica.gui.button.area_editor.analyze_area"),
@@ -675,7 +667,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
             switch (this.type)
             {
                 case NEW_SUB_REGION -> this.gui.subRegionWorkflow.promptNewRegion();
-                case SAVE_VERSION -> this.gui.subRegionWorkflow.promptSaveVersion();
                 case ANALYZE_AREA -> this.gui.subRegionWorkflow.analyzeArea();
                 case SET_ORIGIN_TO_PLAYER -> this.gui.setOriginToPlayer();
                 case CHANGE_CORNER_MODE ->
