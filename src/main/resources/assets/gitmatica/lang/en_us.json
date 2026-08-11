@@ -201,7 +201,7 @@
   "gitmatica.gui.message.lvc_project.recovery_data_unreadable": "Interrupted recovery data was unreadable and was cleared. Run Scan Changes before continuing.",
   "gitmatica.gui.message.lvc_project.unsaved_changes": "You have unsaved changes in your workspace. Please save a version or discard your changes.",
   "gitmatica.gui.label.lvc_project_editor.project_name": "Project Name",
-  "gitmatica.gui.button.lvc_project_editor.show_manual_origin": "Show Manual Origin: %s",
+  "gitmatica.gui.button.lvc_project_editor.manual_origin": "Manual Origin: %s",
   "gitmatica.gui.label.lvc_project_editor.placement_origin": "Placement origin",
   "gitmatica.gui.label.lvc_project_editor.manual_origin": "Manual origin",
   "gitmatica.gui.label.lvc_project_editor.project_origin": "Schematic Origin",

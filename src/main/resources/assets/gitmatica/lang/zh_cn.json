@@ -201,7 +201,7 @@
   "gitmatica.gui.message.lvc_project.recovery_data_unreadable": "中断的 Gitmatica 恢复数据无法读取，已清除。继续前请先运行扫描改动。",
   "gitmatica.gui.message.lvc_project.unsaved_changes": "你的工作区有未保存的更改。请保存一个版本或丢弃你的更改。",
   "gitmatica.gui.label.lvc_project_editor.project_name": "项目名称",
-  "gitmatica.gui.button.lvc_project_editor.show_manual_origin": "显示手动原点：%s",
+  "gitmatica.gui.button.lvc_project_editor.manual_origin": "手动原点：%s",
   "gitmatica.gui.label.lvc_project_editor.placement_origin": "放置原点",
   "gitmatica.gui.label.lvc_project_editor.manual_origin": "手动原点",
   "gitmatica.gui.label.lvc_project_editor.project_origin": "原理图原点",

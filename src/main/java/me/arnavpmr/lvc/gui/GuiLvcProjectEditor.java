@@ -48,9 +48,9 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     private static final int BUTTON_GROUP_GAP = 4;
     private static final int TEXT_FIELD_HEIGHT = 16;
     private static final int COORDINATE_TOP_Y = TOP - 5;
-    private static final int COORDINATE_GROUP_WIDTH = 168;
+    private static final int COORDINATE_GROUP_WIDTH = 100;
     private static final int COORDINATE_GROUP_LEFT_GAP = 16;
-    private static final int COORDINATE_GROUP_GAP = 12;
+    private static final int COORDINATE_GROUP_GAP = 10;
     private static final int TITLE_COLUMN_GAP = 8;
     private static final int TITLE_TOOLTIP_MAX_WIDTH = 220;
     private static final int TITLE_TOOLTIP_SCREEN_PADDING = 32;
@@ -281,9 +281,9 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         boolean visible = LvcConfigs.isManualOriginVisible(
                 this.repositoryDirectory);
         ButtonOnOff button = new ButtonOnOff(
-                x, y, -1, visible,
-                "gitmatica.gui.button.lvc_project_editor.show_manual_origin",
-                false);
+                x, y, -1, false,
+                "gitmatica.gui.button.lvc_project_editor.manual_origin",
+                visible);
         this.addButton(button, new ButtonListener(this, ButtonType.MANUAL_ORIGIN));
     }
 
@@ -301,14 +301,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
                 this::setOriginToPlayer
         ));
 
-        BlockPos manualOrigin = LvcSubRegionEditSession.draftManualOrigin(
-                this.repositoryDirectory);
-
-        if (manualOrigin == null)
-        {
-            manualOrigin = this.state.manualOrigin();
-        }
-
         this.manualOriginEditor = this.addWidget(new WidgetLvcBlockPosEditor(
                 this.getManualOriginGroupX(),
                 this.getManualOriginGroupY(),
@@ -316,16 +308,14 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
                 StringUtils.translate(
                         "gitmatica.gui.label.lvc_project_editor.manual_origin"),
                 ButtonType.SET_ORIGIN_TO_PLAYER.getDisplayName(),
-                manualOrigin,
-                this::updateManualOriginDraft,
+                this.state.manualOrigin(),
+                this::updateManualOrigin,
                 () -> this.setErrorStatus(StringUtils.translate(
                         "gitmatica.error.lvc_project_editor.invalid_integer")),
-                this::setManualOriginToPlayer,
-                this::focusManualOrigin
+                this::setManualOriginToPlayer
         ));
         this.manualOriginEditor.setEnabled(
-                LvcSubRegionEditSession.canEditManualOrigin(
-                        this.repositoryDirectory));
+                LvcConfigs.isManualOriginVisible(this.repositoryDirectory));
     }
 
     private void createBottomButtons()
@@ -467,26 +457,26 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         }
     }
 
-    private boolean updateManualOriginDraft(BlockPos origin)
+    private boolean updateManualOrigin(BlockPos origin)
     {
-        if (!LvcSubRegionEditSession.updateManualOriginDraft(
-                this.repositoryDirectory, origin))
+        try
         {
-            return false;
-        }
-
-        this.selectedRegionName = null;
-        this.clearStatus();
-        return true;
-    }
-
-    private void focusManualOrigin()
-    {
-        if (LvcSubRegionEditSession.focusManualOrigin(
-                this.repositoryDirectory))
-        {
-            this.selectedRegionName = null;
+            LvcSubRegionEditSession.discardManualOriginDraft(
+                    this.repositoryDirectory);
+            LvcSemanticProjectEditor.updateManualOriginFromWorld(
+                    this.repositoryDirectory, origin);
+            LvcManualOriginMarkerRegistry.refresh(this.repositoryDirectory);
+            this.refreshState();
             this.clearStatus();
+            LvcDiagnostics.debug(
+                    "GuiLvcProjectEditor: manual origin saved repo='{}' origin='{}'",
+                    this.repositoryDirectory, origin);
+            return true;
+        }
+        catch (Exception e)
+        {
+            this.setErrorStatus(e.getMessage());
+            return false;
         }
     }
 
@@ -505,7 +495,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         BlockPos origin = fi.dy.masa.malilib.util.position.PositionUtils
                 .getEntityBlockPos(player);
 
-        if (this.updateManualOriginDraft(origin) &&
+        if (this.updateManualOrigin(origin) &&
                 this.manualOriginEditor != null)
         {
             this.manualOriginEditor.setValue(origin);
@@ -517,6 +507,13 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         boolean visible = !LvcConfigs.isManualOriginVisible(
                 this.repositoryDirectory);
         LvcConfigs.setManualOriginVisible(this.repositoryDirectory, visible);
+
+        if (!visible)
+        {
+            LvcSubRegionEditSession.discardManualOriginDraft(
+                    this.repositoryDirectory);
+        }
+
         LvcManualOriginMarkerRegistry.refresh(this.repositoryDirectory);
         this.initGui();
     }
@@ -755,7 +752,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         CHANGE_SELECTION_MODE("litematica.gui.button.area_editor.change_selection_mode"),
         CHANGE_CORNER_MODE("litematica.gui.button.area_editor.change_corner_mode"),
         NEW_SUB_REGION("gitmatica.gui.button.lvc_project_editor.new_sub_region"),
-        MANUAL_ORIGIN("gitmatica.gui.button.lvc_project_editor.show_manual_origin"),
+        MANUAL_ORIGIN("gitmatica.gui.button.lvc_project_editor.manual_origin"),
         SET_ORIGIN_TO_PLAYER("litematica.gui.button.move_to_player"),
         ANALYZE_AREA("litematica.gui.button.area_editor.analyze_area"),
         PROJECT_MANAGER("gitmatica.gui.button.lvc_project.back_to_manager"),

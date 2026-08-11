@@ -5,14 +5,15 @@ import net.minecraft.core.BlockPos;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.malilib.render.RenderUtils;
 import fi.dy.masa.malilib.util.data.Color4f;
+import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
 
-/** Renders applied manual origins independently from tracking placement boxes. */
+/** Renders visible manual origins and their applied HEAD differences. */
 public final class LvcManualOriginRenderer
 {
     private static final float EXPAND = 0.001f;
     private static final float LINE_WIDTH = 2f;
-    private static final Color4f WORKING_ORANGE = color(0xFF9010);
-    private static final Color4f HEAD_YELLOW = color(0xFFFF00);
+    private static final Color4f WORKING_HOT_PINK = color(0xFF69B4);
+    private static final Color4f HEAD_ORANGE = color(0xFF9010);
 
     private LvcManualOriginRenderer()
     {
@@ -30,10 +31,12 @@ public final class LvcManualOriginRenderer
         {
             if (marker.modified())
             {
-                render(marker.head(), HEAD_YELLOW);
+                render(marker.head(), HEAD_ORANGE);
             }
 
-            render(marker.working(), WORKING_ORANGE);
+            BlockPos draft = LvcSubRegionEditSession.draftManualOrigin(
+                    marker.repositoryDirectory());
+            render(draft != null ? draft : marker.working(), WORKING_HOT_PINK);
         }
     }
 

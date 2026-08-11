@@ -70,6 +70,25 @@ public final class LvcSemanticProjectEditor
     {
         Objects.requireNonNull(relativeOrigin, "relativeOrigin");
         ActiveSemanticProject project = readActiveProject(repositoryDirectory);
+        return updateManualOrigin(repositoryDirectory, project, relativeOrigin);
+    }
+
+    public static boolean updateManualOriginFromWorld(
+            Path repositoryDirectory,
+            BlockPos worldOrigin) throws IOException
+    {
+        Objects.requireNonNull(worldOrigin, "worldOrigin");
+        ActiveSemanticProject project = readActiveProject(repositoryDirectory);
+        BlockPos placementOrigin = blockPosFromList(project.placement().origin());
+        BlockPos relativeOrigin = subtractExact(worldOrigin, placementOrigin);
+        return updateManualOrigin(repositoryDirectory, project, relativeOrigin);
+    }
+
+    private static boolean updateManualOrigin(
+            Path repositoryDirectory,
+            ActiveSemanticProject project,
+            BlockPos relativeOrigin) throws IOException
+    {
         List<Integer> coordinates = blockPosToList(relativeOrigin);
 
         if (project.site().manualOrigin().equals(coordinates))
@@ -255,6 +274,22 @@ public final class LvcSemanticProjectEditor
         catch (ArithmeticException e)
         {
             throw new IllegalArgumentException("LVC manual origin exceeds the supported coordinate range", e);
+        }
+    }
+
+    private static BlockPos subtractExact(BlockPos left, BlockPos right)
+    {
+        try
+        {
+            return new BlockPos(
+                    Math.subtractExact(left.getX(), right.getX()),
+                    Math.subtractExact(left.getY(), right.getY()),
+                    Math.subtractExact(left.getZ(), right.getZ()));
+        }
+        catch (ArithmeticException e)
+        {
+            throw new IllegalArgumentException(
+                    "LVC manual origin exceeds the supported coordinate range", e);
         }
     }
 

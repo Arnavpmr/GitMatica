@@ -34,6 +34,12 @@ abstract class MixinOverlayRenderer
     private void gitmatica$renderStructuralBounds(CallbackInfo callbackInfo)
     {
         LvcSubRegionStructuralBoundsRenderer.render();
+    }
+
+    @Inject(method = "renderBoxes", at = @At("TAIL"))
+    private void gitmatica$renderManualOriginsAbovePlacementBoxes(
+            CallbackInfo callbackInfo)
+    {
         LvcManualOriginRenderer.render();
     }
 

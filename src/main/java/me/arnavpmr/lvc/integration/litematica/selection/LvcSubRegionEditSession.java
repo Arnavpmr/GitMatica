@@ -181,43 +181,6 @@ public final class LvcSubRegionEditSession
         return true;
     }
 
-    public static boolean focusManualOrigin(Path repositoryDirectory)
-    {
-        if (!canEditManualOrigin(repositoryDirectory))
-        {
-            return false;
-        }
-
-        SchematicPlacement placement =
-                LvcTrackingOverlayService.findTrackingPlacement(repositoryDirectory);
-
-        if (placement == null)
-        {
-            return false;
-        }
-
-        DataManager.getSchematicPlacementManager()
-                .setSelectedSchematicPlacement(placement);
-        return focusManualOrigin(new SelectedOverlay(
-                repositoryDirectory.toAbsolutePath().normalize(), placement)) != null;
-    }
-
-    public static boolean updateManualOriginDraft(
-            Path repositoryDirectory,
-            BlockPos worldOrigin)
-    {
-        Objects.requireNonNull(worldOrigin, "worldOrigin");
-
-        if (!focusManualOrigin(repositoryDirectory) || activeEdit == null)
-        {
-            return false;
-        }
-
-        activeEdit.selection().setExplicitOrigin(worldOrigin.immutable());
-        activeEdit.selection().setOriginSelected(true);
-        return true;
-    }
-
     @Nullable
     public static BlockPos draftManualOrigin(Path repositoryDirectory)
     {
@@ -233,14 +196,6 @@ public final class LvcSubRegionEditSession
         return null;
     }
 
-    public static boolean isEditingManualOrigin(
-            @Nullable SchematicPlacement placement)
-    {
-        return activeEdit != null &&
-                activeEdit.target() == EditTarget.MANUAL_ORIGIN &&
-                activeEdit.placement() == placement;
-    }
-
     public static void discardManualOriginDraft(Path repositoryDirectory)
     {
         if (activeEdit != null &&
@@ -250,20 +205,6 @@ public final class LvcSubRegionEditSession
         {
             clear();
         }
-    }
-
-    public static boolean canEditManualOrigin(Path repositoryDirectory)
-    {
-        Objects.requireNonNull(repositoryDirectory, "repositoryDirectory");
-
-        if (!LvcToolModes.isEditProjectActive() ||
-                !LvcConfigs.isManualOriginVisible(repositoryDirectory) ||
-                !canApplyCurrentEdit())
-        {
-            return false;
-        }
-
-        return true;
     }
 
     public static boolean canApplyCurrentEdit()
@@ -393,27 +334,8 @@ public final class LvcSubRegionEditSession
                     "Gitmatica manual origin selection has no origin");
         }
 
-        BlockPos placementOrigin = edit.placement().getOrigin();
-        BlockPos relativeOrigin;
-
-        try
-        {
-            relativeOrigin = new BlockPos(
-                    Math.subtractExact(
-                            worldOrigin.getX(), placementOrigin.getX()),
-                    Math.subtractExact(
-                            worldOrigin.getY(), placementOrigin.getY()),
-                    Math.subtractExact(
-                            worldOrigin.getZ(), placementOrigin.getZ()));
-        }
-        catch (ArithmeticException e)
-        {
-            throw new IllegalArgumentException(
-                    "LVC manual origin exceeds the supported coordinate range", e);
-        }
-
-        LvcSemanticProjectEditor.updateManualOrigin(
-                edit.repositoryDirectory(), relativeOrigin);
+        LvcSemanticProjectEditor.updateManualOriginFromWorld(
+                edit.repositoryDirectory(), worldOrigin);
         Path repositoryDirectory = edit.repositoryDirectory();
         clear();
         LvcManualOriginMarkerRegistry.refresh(repositoryDirectory);
@@ -471,29 +393,50 @@ public final class LvcSubRegionEditSession
         double vanillaDistance = vanillaHit.getType() == HitResult.Type.MISS
                 ? -1D
                 : vanillaHit.getLocation().distanceTo(start);
-        List<HitTarget> candidates = new java.util.ArrayList<>();
+        BlockPos manualOrigin = null;
 
         if (LvcConfigs.isManualOriginVisible(overlay.repositoryDirectory()))
         {
             try
             {
-                BlockPos origin = activeEdit != null &&
+                manualOrigin = activeEdit != null &&
                         activeEdit.matches(overlay) &&
                         activeEdit.target() == EditTarget.MANUAL_ORIGIN
                         ? activeEdit.selection().getExplicitOrigin()
                         : LvcSemanticProjectEditor.readState(
                                 overlay.repositoryDirectory()).manualOrigin();
-                addHit(candidates, EditTarget.MANUAL_ORIGIN, null, origin,
-                        start, end, vanillaDistance);
             }
             catch (Exception ignored)
             {
             }
         }
 
-        for (Map.Entry<String, Box> entry :
-                overlay.placement().getSubRegionBoxes(RequiredEnabled.ANY)
-                        .entrySet().stream()
+        FocusedTarget focused = focusedTarget(overlay);
+        return findTarget(
+                manualOrigin,
+                overlay.placement().getSubRegionBoxes(RequiredEnabled.ANY),
+                focused != null ? focused.target() : null,
+                focused != null ? focused.regionName() : null,
+                start,
+                end,
+                vanillaDistance);
+    }
+
+    @Nullable
+    static HitTarget findTarget(
+            @Nullable BlockPos manualOrigin,
+            Map<String, Box> subRegionBoxes,
+            @Nullable EditTarget focusedTarget,
+            @Nullable String focusedRegionName,
+            Vec3 start,
+            Vec3 end,
+            double vanillaDistance)
+    {
+        List<HitTarget> candidates = new java.util.ArrayList<>();
+        addHit(candidates, EditTarget.MANUAL_ORIGIN, null, manualOrigin,
+                start, end, vanillaDistance);
+
+        for (Map.Entry<String, Box> entry : subRegionBoxes.entrySet().stream()
                         .sorted(Map.Entry.comparingByKey())
                         .toList())
         {
@@ -506,7 +449,8 @@ public final class LvcSubRegionEditSession
         return candidates.stream()
                 .sorted(java.util.Comparator
                         .comparingDouble(HitTarget::distance)
-                        .thenComparingInt(target -> priority(overlay, target))
+                        .thenComparingInt(target -> priority(
+                                target, focusedTarget, focusedRegionName))
                         .thenComparing(target -> target.regionName() == null
                                 ? ""
                                 : target.regionName()))
@@ -544,9 +488,13 @@ public final class LvcSubRegionEditSession
         }
     }
 
-    private static int priority(SelectedOverlay overlay, HitTarget target)
+    private static int priority(
+            HitTarget target,
+            @Nullable EditTarget focusedTarget,
+            @Nullable String focusedRegionName)
     {
-        if (isFocused(overlay, target))
+        if (target.target() == focusedTarget &&
+                Objects.equals(target.regionName(), focusedRegionName))
         {
             return 0;
         }
@@ -556,16 +504,24 @@ public final class LvcSubRegionEditSession
 
     private static boolean isFocused(SelectedOverlay overlay, HitTarget target)
     {
+        FocusedTarget focused = focusedTarget(overlay);
+        return focused != null && focused.target() == target.target() &&
+                Objects.equals(focused.regionName(), target.regionName());
+    }
+
+    @Nullable
+    private static FocusedTarget focusedTarget(SelectedOverlay overlay)
+    {
         if (activeEdit != null && activeEdit.matches(overlay))
         {
-            return activeEdit.target() == target.target() &&
-                    Objects.equals(activeEdit.regionName(), target.regionName());
+            return new FocusedTarget(
+                    activeEdit.target(), activeEdit.regionName());
         }
 
-        return target.target() == EditTarget.SUB_REGION &&
-                Objects.equals(
-                        overlay.placement().getSelectedSubRegionName(),
-                        target.regionName());
+        String regionName = overlay.placement().getSelectedSubRegionName();
+        return regionName != null
+                ? new FocusedTarget(EditTarget.SUB_REGION, regionName)
+                : null;
     }
 
     @Nullable
@@ -663,16 +619,22 @@ public final class LvcSubRegionEditSession
         }
     }
 
-    private enum EditTarget
+    enum EditTarget
     {
         SUB_REGION,
         MANUAL_ORIGIN
     }
 
-    private record HitTarget(
+    record HitTarget(
             EditTarget target,
             @Nullable String regionName,
             double distance)
+    {
+    }
+
+    private record FocusedTarget(
+            EditTarget target,
+            @Nullable String regionName)
     {
     }
 }

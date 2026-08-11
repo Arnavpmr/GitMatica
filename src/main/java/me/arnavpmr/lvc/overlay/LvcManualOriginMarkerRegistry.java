@@ -18,7 +18,6 @@ import fi.dy.masa.litematica.data.DataManager;
 import fi.dy.masa.litematica.schematic.placement.SchematicPlacement;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.config.LvcConfigs;
-import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
 import me.arnavpmr.lvc.model.LvcManifest;
 import me.arnavpmr.lvc.storage.LvcRepository;
 import me.arnavpmr.lvc.storage.LvcSemanticRepository;
@@ -91,8 +90,7 @@ public final class LvcManualOriginMarkerRegistry
         for (CachedMarker marker : markers.values())
         {
             if (!marker.placement().isEnabled() ||
-                    !LvcConfigs.isManualOriginVisible(marker.repositoryDirectory()) ||
-                    LvcSubRegionEditSession.isEditingManualOrigin(marker.placement()))
+                    !LvcConfigs.isManualOriginVisible(marker.repositoryDirectory()))
             {
                 continue;
             }

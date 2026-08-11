@@ -22,6 +22,10 @@ public final class LvcTransientSubRegionSelectionIntegrationTest
                 LvcTransientSubRegionSelectionIntegrationTest::preservesRelativeBounds);
         run("shared subregion corners select the alphabetically first name",
                 LvcTransientSubRegionSelectionIntegrationTest::sharedCornerUsesAlphabeticalName);
+        run("manual origin wins a shared unfocused subregion corner",
+                LvcTransientSubRegionSelectionIntegrationTest::manualOriginWinsUnfocusedSharedCorner);
+        run("focused subregion wins its corner over the manual origin",
+                LvcTransientSubRegionSelectionIntegrationTest::focusedRegionWinsSharedCorner);
     }
 
     private static void preservesRelativeBounds()
@@ -64,6 +68,47 @@ public final class LvcTransientSubRegionSelectionIntegrationTest
                 -1D
         );
         assertEquals("Alpha", hit, "alphabetical shared-corner selection");
+    }
+
+    private static void manualOriginWinsUnfocusedSharedCorner()
+    {
+        LvcSubRegionEditSession.HitTarget hit = sharedManualOriginHit(
+                null, null);
+        assertEquals(
+                LvcSubRegionEditSession.EditTarget.MANUAL_ORIGIN,
+                hit.target(),
+                "unfocused shared-corner target");
+    }
+
+    private static void focusedRegionWinsSharedCorner()
+    {
+        LvcSubRegionEditSession.HitTarget hit = sharedManualOriginHit(
+                LvcSubRegionEditSession.EditTarget.SUB_REGION, "Alpha");
+        assertEquals(
+                LvcSubRegionEditSession.EditTarget.SUB_REGION,
+                hit.target(),
+                "focused shared-corner target");
+        assertEquals("Alpha", hit.regionName(), "focused region name");
+    }
+
+    private static LvcSubRegionEditSession.HitTarget sharedManualOriginHit(
+            LvcSubRegionEditSession.EditTarget focusedTarget,
+            String focusedRegionName)
+    {
+        BlockPos sharedCorner = BlockPos.ZERO;
+        Map<String, Box> boxes = Map.of(
+                "Alpha",
+                new Box(sharedCorner, new BlockPos(4, 4, 4), "Alpha"));
+        Vec3 start = new Vec3(0.5D, 0.5D, -2D);
+        Vec3 end = new Vec3(0.5D, 0.5D, 2D);
+        return Objects.requireNonNull(LvcSubRegionEditSession.findTarget(
+                sharedCorner,
+                boxes,
+                focusedTarget,
+                focusedRegionName,
+                start,
+                end,
+                -1D));
     }
 
     private static void run(String name, Runnable test)
