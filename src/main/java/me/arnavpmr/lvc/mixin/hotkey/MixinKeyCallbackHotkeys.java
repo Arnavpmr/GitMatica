@@ -26,7 +26,7 @@ abstract class MixinKeyCallbackHotkeys
             IKeybind key,
             CallbackInfoReturnable<Boolean> callbackInfo)
     {
-        if (LvcToolModes.isEditSubregionsActive() &&
+        if (LvcToolModes.isEditProjectActive() &&
                 key == Hotkeys.EXECUTE_OPERATION.getKeybind() &&
                 LvcSubRegionEditSession.applyCurrentBounds())
         {
@@ -34,7 +34,7 @@ abstract class MixinKeyCallbackHotkeys
             return;
         }
 
-        if (LvcToolModes.isEditSubregionsActive() &&
+        if (LvcToolModes.isEditProjectActive() &&
                 key == Hotkeys.TOOL_SELECT_ELEMENTS.getKeybind() &&
                 LvcSubRegionEditSession.selectOtherSubRegionAtCrosshair(200))
         {

@@ -19,6 +19,7 @@ public final class GitmaticaMixinAudit
             "fi.dy.masa.litematica.gui.widgets.WidgetSchematicVerificationResult$BlockMismatchInfo",
             "fi.dy.masa.litematica.network.ServuxLitematicaHandler",
             "fi.dy.masa.litematica.render.OverlayRenderer",
+            "fi.dy.masa.litematica.render.infohud.ToolHud",
             "fi.dy.masa.litematica.render.schematic.ChunkRendererSchematicVbo",
             "fi.dy.masa.litematica.render.schematic.WorldRendererSchematic",
             "fi.dy.masa.litematica.scheduler.TaskScheduler",

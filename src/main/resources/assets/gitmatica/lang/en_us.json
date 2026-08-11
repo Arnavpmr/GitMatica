@@ -1,5 +1,5 @@
 {
-  "gitmatica.tool_mode.name.edit_subregions": "Edit Subregions",
+  "gitmatica.tool_mode.name.edit_project": "Edit Project",
   "gitmatica.config.generic.comment.showCheckoutWarning": "Show the Gitmatica Checkout warning before restoring the workspace to another version.",
   "gitmatica.config.generic.comment.showClearAreaWarning": "Show the Gitmatica Clear Area warning before clearing tracked blocks and entities.",
   "gitmatica.config.generic.comment.showDiscardChangesWarning": "Show the Gitmatica Discard Changes warning before restoring the workspace from the latest version.",

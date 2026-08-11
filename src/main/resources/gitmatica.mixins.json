@@ -28,6 +28,7 @@
     "placement.MixinSchematicPlacementManager",
     "render.MixinChunkRendererSchematicVbo",
     "render.MixinOverlayRenderer",
+    "render.MixinToolHud",
     "render.MixinWorldRendererSchematic",
     "selection.MixinSelectionManager",
     "task.MixinTaskScheduler",

@@ -146,6 +146,23 @@ public final class LvcSubRegionStructuralDiffRegistry
         return false;
     }
 
+    public static boolean hasModifiedRegionDefinitions(
+            @Nullable SchematicPlacement placement)
+    {
+        BoundDiff entry = entryFor(placement);
+        return entry != null && !entry.source().bounds().isEmpty();
+    }
+
+    public static boolean isRegionDefinitionModified(
+            @Nullable SchematicPlacement placement,
+            String regionName)
+    {
+        Objects.requireNonNull(regionName, "regionName");
+        BoundDiff entry = entryFor(placement);
+        return entry != null && entry.source().bounds().stream()
+                .anyMatch(bounds -> bounds.regionName().equals(regionName));
+    }
+
     public static boolean requiresOverlayRebuild(Path repositoryDirectory)
             throws IOException
     {

@@ -52,7 +52,7 @@ public final class LvcSubRegionEditSession
     @Nullable
     public static AreaSelection currentSelection()
     {
-        if (!LvcToolModes.isEditSubregionsActive())
+        if (!LvcToolModes.isEditProjectActive())
         {
             clear();
             return null;
@@ -126,7 +126,7 @@ public final class LvcSubRegionEditSession
 
     public static boolean selectOtherSubRegionAtCrosshair(int maxDistance)
     {
-        if (!LvcToolModes.isEditSubregionsActive())
+        if (!LvcToolModes.isEditProjectActive())
         {
             return false;
         }

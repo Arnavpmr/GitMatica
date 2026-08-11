@@ -1,5 +1,5 @@
 {
-  "gitmatica.tool_mode.name.edit_subregions": "编辑子区域",
+  "gitmatica.tool_mode.name.edit_project": "编辑项目",
   "gitmatica.config.generic.comment.showCheckoutWarning": "在 Gitmatica 检出并将工作区恢复到其他版本前显示警告。",
   "gitmatica.config.generic.comment.showClearAreaWarning": "在 Gitmatica 清除追踪方块和实体前显示警告。",
   "gitmatica.config.generic.comment.showDiscardChangesWarning": "在 Gitmatica 放弃改动并从最新版本恢复工作区前显示警告。",

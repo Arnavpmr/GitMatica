@@ -17,7 +17,7 @@ import me.arnavpmr.lvc.integration.litematica.tool.LvcToolModes;
 @Mixin(ToolMode.class)
 abstract class MixinToolMode
 {
-    private static final String INTERNAL_NAME = "EDIT_SUBREGIONS";
+    private static final String INTERNAL_NAME = "EDIT_PROJECT";
 
     @Shadow @Final @Mutable private static ToolMode[] $VALUES;
     @Shadow @Final @Mutable private static ImmutableList<ToolMode> VALUES;
@@ -35,13 +35,13 @@ abstract class MixinToolMode
     }
 
     @Inject(method = "<clinit>", at = @At("TAIL"))
-    private static void gitmatica$addEditSubregionsMode(CallbackInfo callbackInfo)
+    private static void gitmatica$addEditProjectMode(CallbackInfo callbackInfo)
     {
         for (ToolMode mode : $VALUES)
         {
             if (INTERNAL_NAME.equals(mode.name()))
             {
-                LvcToolModes.installEditSubregions(mode);
+                LvcToolModes.installEditProject(mode);
                 return;
             }
         }
@@ -49,14 +49,14 @@ abstract class MixinToolMode
         ToolMode mode = gitmatica$createToolMode(
                 INTERNAL_NAME,
                 $VALUES.length,
-                "edit_subregions",
-                "gitmatica.tool_mode.name.edit_subregions",
+                "edit_project",
+                "gitmatica.tool_mode.name.edit_project",
                 false,
                 false
         );
         $VALUES = Arrays.copyOf($VALUES, $VALUES.length + 1);
         $VALUES[$VALUES.length - 1] = mode;
         VALUES = ImmutableList.copyOf($VALUES);
-        LvcToolModes.installEditSubregions(mode);
+        LvcToolModes.installEditProject(mode);
     }
 }

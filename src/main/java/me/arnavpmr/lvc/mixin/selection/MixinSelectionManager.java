@@ -20,7 +20,7 @@ abstract class MixinSelectionManager
     private void gitmatica$getTransientSubRegionSelection(
             CallbackInfoReturnable<AreaSelection> callbackInfo)
     {
-        if (LvcToolModes.isEditSubregionsActive())
+        if (LvcToolModes.isEditProjectActive())
         {
             callbackInfo.setReturnValue(LvcSubRegionEditSession.currentSelection());
         }
@@ -31,7 +31,7 @@ abstract class MixinSelectionManager
     private void gitmatica$hideLitematicaSelectionId(
             CallbackInfoReturnable<String> callbackInfo)
     {
-        if (LvcToolModes.isEditSubregionsActive())
+        if (LvcToolModes.isEditProjectActive())
         {
             callbackInfo.setReturnValue(null);
         }
@@ -42,7 +42,7 @@ abstract class MixinSelectionManager
             @Nullable String selectionId,
             CallbackInfo callbackInfo)
     {
-        if (LvcToolModes.isEditSubregionsActive())
+        if (LvcToolModes.isEditProjectActive())
         {
             callbackInfo.cancel();
         }
@@ -52,7 +52,7 @@ abstract class MixinSelectionManager
     private void gitmatica$hideTransientSelectionFromAreaEditor(
             CallbackInfoReturnable<GuiBase> callbackInfo)
     {
-        if (LvcToolModes.isEditSubregionsActive())
+        if (LvcToolModes.isEditProjectActive())
         {
             callbackInfo.setReturnValue(null);
         }

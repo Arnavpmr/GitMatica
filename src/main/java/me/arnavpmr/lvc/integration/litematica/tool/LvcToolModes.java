@@ -8,31 +8,31 @@ import fi.dy.masa.litematica.tool.ToolMode;
 
 public final class LvcToolModes
 {
-    @Nullable private static ToolMode editSubregions;
+    @Nullable private static ToolMode editProject;
 
     private LvcToolModes()
     {
     }
 
-    public static void installEditSubregions(ToolMode mode)
+    public static void installEditProject(ToolMode mode)
     {
         Objects.requireNonNull(mode, "mode");
 
-        if (editSubregions != null && editSubregions != mode)
+        if (editProject != null && editProject != mode)
         {
-            throw new IllegalStateException("Gitmatica Edit Subregions tool mode was installed twice");
+            throw new IllegalStateException("Gitmatica Edit Project tool mode was installed twice");
         }
 
-        editSubregions = mode;
+        editProject = mode;
     }
 
-    public static boolean isEditSubregions(@Nullable ToolMode mode)
+    public static boolean isEditProject(@Nullable ToolMode mode)
     {
-        return editSubregions != null && mode == editSubregions;
+        return editProject != null && mode == editProject;
     }
 
-    public static boolean isEditSubregionsActive()
+    public static boolean isEditProjectActive()
     {
-        return isEditSubregions(DataManager.getToolMode());
+        return isEditProject(DataManager.getToolMode());
     }
 }
