@@ -14,6 +14,7 @@ import me.arnavpmr.lvc.config.LvcInputHandler;
 import me.arnavpmr.lvc.config.LvcKeyCallbacks;
 import me.arnavpmr.lvc.gui.GuiLvcConfigs;
 import me.arnavpmr.lvc.overlay.LvcPersistedStructuralDiffRestorer;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
 
 /**
@@ -38,6 +39,8 @@ public final class GitmaticaInitialization implements IInitializationHandler
                 LvcSubRegionStructuralDiffRegistry::onClientTick);
         TickHandler.getInstance().registerClientTickHandler(
                 LvcPersistedStructuralDiffRestorer::onClientTick);
+        TickHandler.getInstance().registerClientTickHandler(
+                LvcManualOriginMarkerRegistry::onClientTick);
 
         GitmaticaWorldLoadListener worldLoadListener = new GitmaticaWorldLoadListener();
         WorldLoadHandler.getInstance().registerWorldLoadPreHandler(worldLoadListener);

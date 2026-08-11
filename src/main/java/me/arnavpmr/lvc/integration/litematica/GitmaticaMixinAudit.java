@@ -12,6 +12,7 @@ public final class GitmaticaMixinAudit
             "fi.dy.masa.litematica.data.DataManager",
             "fi.dy.masa.litematica.data.EntityDataManager",
             "fi.dy.masa.litematica.event.KeyCallbacks$KeyCallbackHotkeys",
+            "fi.dy.masa.litematica.event.KeyCallbacks$KeyCallbackToggleMessage",
             "fi.dy.masa.litematica.gui.GuiMainMenu",
             "fi.dy.masa.litematica.gui.GuiSchematicSaveBase",
             "fi.dy.masa.litematica.gui.widgets.WidgetSchematicEntry",

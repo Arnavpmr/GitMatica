@@ -2,6 +2,8 @@ package me.arnavpmr.lvc.gui;
 
 import me.arnavpmr.lvc.semantic.LvcSemanticProjectEditor;
 import me.arnavpmr.lvc.semantic.LvcProjectEditorState;
+import me.arnavpmr.lvc.config.LvcConfigs;
+import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
 import java.nio.file.Path;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -16,6 +18,7 @@ import me.arnavpmr.lvc.gui.widgets.WidgetLvcProjectSubRegion;
 import me.arnavpmr.lvc.gui.widgets.WidgetLvcProjectSubRegionList;
 import me.arnavpmr.lvc.model.LvcManifest;
 import me.arnavpmr.lvc.overlay.LvcTrackingSubRegionSelection;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
 import me.arnavpmr.lvc.LvcReference;
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.gui.GuiMainMenu;
@@ -47,6 +50,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     private static final int COORDINATE_TOP_Y = TOP - 5;
     private static final int COORDINATE_GROUP_WIDTH = 168;
     private static final int COORDINATE_GROUP_LEFT_GAP = 16;
+    private static final int COORDINATE_GROUP_GAP = 12;
     private static final int TITLE_COLUMN_GAP = 8;
     private static final int TITLE_TOOLTIP_MAX_WIDTH = 220;
     private static final int TITLE_TOOLTIP_SCREEN_PADDING = 32;
@@ -55,7 +59,6 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     private static final int ACTION_BUTTON_TOP_GAP = 4;
     private static final int STATUS_COLOR = 0xFFAAAAAA;
     private static final int ERROR_COLOR = 0xFFFF5555;
-    private static final int SUCCESS_COLOR = 0xFF55FF55;
     private static final int INPUT_FILL_COLOR = 0xE0000000;
     private static final int INPUT_OUTLINE_COLOR = 0xFF808080;
     private static final int READ_ONLY_TEXT_COLOR = 0xFFFFFFFF;
@@ -65,6 +68,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     private String projectName;
     @Nullable private LvcProjectEditorState state;
     @Nullable private WidgetLvcBlockPosEditor originEditor;
+    @Nullable private WidgetLvcBlockPosEditor manualOriginEditor;
     @Nullable private String selectedRegionName;
     private String statusText = "";
     private int statusColor = STATUS_COLOR;
@@ -82,6 +86,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     public void initGui()
     {
         this.originEditor = null;
+        this.manualOriginEditor = null;
         this.refreshState();
         this.setListPosition(SUB_REGION_LIST_X, this.getSubRegionListY());
         super.initGui();
@@ -89,7 +94,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         if (this.state != null)
         {
             this.createTopButtons();
-            this.createOriginEditor();
+            this.createOriginEditors();
         }
 
         this.createBottomButtons();
@@ -140,6 +145,11 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
             this.originEditor.blurIfOutside(click);
         }
 
+        if (this.manualOriginEditor != null)
+        {
+            this.manualOriginEditor.blurIfOutside(click);
+        }
+
         return super.onMouseClicked(click, doubleClick);
     }
 
@@ -180,9 +190,10 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     {
         int maxWidth = this.getScreenWidth() - LEFT - MARGIN;
 
-        if (this.state != null && this.worldOriginFitsProjectRow())
+        if (this.state != null && this.coordinateGroupsFitProjectRow())
         {
-            maxWidth = Math.min(maxWidth, this.getOriginGroupX() - LEFT - TITLE_COLUMN_GAP);
+            maxWidth = Math.min(maxWidth,
+                    this.getPlacementOriginGroupX() - LEFT - TITLE_COLUMN_GAP);
         }
 
         return Math.max(0, maxWidth);
@@ -196,8 +207,10 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
             this.projectName = this.state.projectName();
             this.title = StringUtils.translate("gitmatica.gui.title.lvc_project_editor", LvcReference.MOD_VERSION, this.projectName);
             this.ensureSelectedRegionExists();
-            LvcDiagnostics.debug("GuiLvcProjectEditor: ui state loaded repo='{}' project='{}' regions={} placementOrigin='{}'",
-                    this.repositoryDirectory, this.projectName, this.state.regions().size(), this.state.placementOrigin());
+            LvcDiagnostics.debug("GuiLvcProjectEditor: ui state loaded repo='{}' project='{}' regions={} placementOrigin='{}' manualOrigin='{}'",
+                    this.repositoryDirectory, this.projectName,
+                    this.state.regions().size(), this.state.placementOrigin(),
+                    this.state.manualOrigin());
         }
         catch (Exception e)
         {
@@ -265,16 +278,20 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
 
     private void createManualOriginButton(int x, int y)
     {
-        ButtonOnOff button = new ButtonOnOff(x, y, -1, false, "gitmatica.gui.button.lvc_project_editor.manual_origin", false);
-        button.setEnabled(false);
+        boolean visible = LvcConfigs.isManualOriginVisible(
+                this.repositoryDirectory);
+        ButtonOnOff button = new ButtonOnOff(
+                x, y, -1, visible,
+                "gitmatica.gui.button.lvc_project_editor.show_manual_origin",
+                false);
         this.addButton(button, new ButtonListener(this, ButtonType.MANUAL_ORIGIN));
     }
 
-    private void createOriginEditor()
+    private void createOriginEditors()
     {
         this.originEditor = this.addWidget(new WidgetLvcBlockPosEditor(
-                this.getOriginGroupX(),
-                this.getCoordinateGroupY(),
+                this.getPlacementOriginGroupX(),
+                this.getPlacementOriginGroupY(),
                 COORDINATE_GROUP_WIDTH,
                 StringUtils.translate("gitmatica.gui.label.lvc_project_editor.placement_origin"),
                 ButtonType.SET_ORIGIN_TO_PLAYER.getDisplayName(),
@@ -283,6 +300,32 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
                 () -> this.setErrorStatus(StringUtils.translate("gitmatica.error.lvc_project_editor.invalid_integer")),
                 this::setOriginToPlayer
         ));
+
+        BlockPos manualOrigin = LvcSubRegionEditSession.draftManualOrigin(
+                this.repositoryDirectory);
+
+        if (manualOrigin == null)
+        {
+            manualOrigin = this.state.manualOrigin();
+        }
+
+        this.manualOriginEditor = this.addWidget(new WidgetLvcBlockPosEditor(
+                this.getManualOriginGroupX(),
+                this.getManualOriginGroupY(),
+                COORDINATE_GROUP_WIDTH,
+                StringUtils.translate(
+                        "gitmatica.gui.label.lvc_project_editor.manual_origin"),
+                ButtonType.SET_ORIGIN_TO_PLAYER.getDisplayName(),
+                manualOrigin,
+                this::updateManualOriginDraft,
+                () -> this.setErrorStatus(StringUtils.translate(
+                        "gitmatica.error.lvc_project_editor.invalid_integer")),
+                this::setManualOriginToPlayer,
+                this::focusManualOrigin
+        ));
+        this.manualOriginEditor.setEnabled(
+                LvcSubRegionEditSession.canEditManualOrigin(
+                        this.repositoryDirectory));
     }
 
     private void createBottomButtons()
@@ -424,10 +467,58 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         }
     }
 
-    private void setSavedStatus(String key)
+    private boolean updateManualOriginDraft(BlockPos origin)
     {
-        this.statusText = StringUtils.translate(key);
-        this.statusColor = SUCCESS_COLOR;
+        if (!LvcSubRegionEditSession.updateManualOriginDraft(
+                this.repositoryDirectory, origin))
+        {
+            return false;
+        }
+
+        this.selectedRegionName = null;
+        this.clearStatus();
+        return true;
+    }
+
+    private void focusManualOrigin()
+    {
+        if (LvcSubRegionEditSession.focusManualOrigin(
+                this.repositoryDirectory))
+        {
+            this.selectedRegionName = null;
+            this.clearStatus();
+        }
+    }
+
+    private void setManualOriginToPlayer()
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        Player player = minecraft.player;
+
+        if (player == null)
+        {
+            this.addMessage(MessageType.ERROR,
+                    "gitmatica.error.lvc_project.no_player");
+            return;
+        }
+
+        BlockPos origin = fi.dy.masa.malilib.util.position.PositionUtils
+                .getEntityBlockPos(player);
+
+        if (this.updateManualOriginDraft(origin) &&
+                this.manualOriginEditor != null)
+        {
+            this.manualOriginEditor.setValue(origin);
+        }
+    }
+
+    private void toggleManualOriginVisibility()
+    {
+        boolean visible = !LvcConfigs.isManualOriginVisible(
+                this.repositoryDirectory);
+        LvcConfigs.setManualOriginVisible(this.repositoryDirectory, visible);
+        LvcManualOriginMarkerRegistry.refresh(this.repositoryDirectory);
+        this.initGui();
     }
 
     private void clearStatus()
@@ -452,24 +543,29 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         return this.getScreenWidth() - MARGIN;
     }
 
-    private boolean worldOriginFitsProjectRow()
+    private boolean coordinateGroupsFitProjectRow()
     {
-        return this.getLeftControlsRightForOrigin(this.getProjectNameFieldBaseWidth()) + COORDINATE_GROUP_LEFT_GAP + COORDINATE_GROUP_WIDTH + MARGIN <= this.getScreenWidth();
+        return this.getLeftControlsRightForOrigin(
+                this.getProjectNameFieldBaseWidth()) +
+                COORDINATE_GROUP_LEFT_GAP +
+                this.getCoordinateGroupsWidth() + MARGIN <=
+                this.getScreenWidth();
     }
 
-    private int getCoordinateGroupY()
+    private boolean coordinateGroupsFitSideBySide()
     {
-        if (this.worldOriginFitsProjectRow())
-        {
-            return COORDINATE_TOP_Y;
-        }
-
-        return this.getActionButtonY() + BUTTON_HEIGHT + 8;
+        return FORM_X + this.getCoordinateGroupsWidth() + MARGIN <=
+                this.getScreenWidth();
     }
 
-    private int getOriginGroupX()
+    private int getCoordinateGroupsWidth()
     {
-        if (!this.worldOriginFitsProjectRow())
+        return COORDINATE_GROUP_WIDTH * 2 + COORDINATE_GROUP_GAP;
+    }
+
+    private int getPlacementOriginGroupX()
+    {
+        if (!this.coordinateGroupsFitProjectRow())
         {
             return FORM_X;
         }
@@ -477,9 +573,41 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         return this.getLeftControlsRightForOrigin(this.getProjectNameFieldWidth()) + COORDINATE_GROUP_LEFT_GAP;
     }
 
+    private int getPlacementOriginGroupY()
+    {
+        return this.coordinateGroupsFitProjectRow()
+                ? COORDINATE_TOP_Y
+                : this.getActionButtonY() + BUTTON_HEIGHT + 8;
+    }
+
+    private int getManualOriginGroupX()
+    {
+        if (this.coordinateGroupsFitProjectRow() ||
+                this.coordinateGroupsFitSideBySide())
+        {
+            return this.getPlacementOriginGroupX() +
+                    COORDINATE_GROUP_WIDTH + COORDINATE_GROUP_GAP;
+        }
+
+        return FORM_X;
+    }
+
+    private int getManualOriginGroupY()
+    {
+        if (this.coordinateGroupsFitProjectRow() ||
+                this.coordinateGroupsFitSideBySide())
+        {
+            return this.getPlacementOriginGroupY();
+        }
+
+        return this.getPlacementOriginGroupY() +
+                WidgetLvcBlockPosEditor.DEFAULT_HEIGHT + 4;
+    }
+
     private int getCoordinateGroupsBottomY()
     {
-        return this.getCoordinateGroupY() + WidgetLvcBlockPosEditor.DEFAULT_HEIGHT;
+        return this.getManualOriginGroupY() +
+                WidgetLvcBlockPosEditor.DEFAULT_HEIGHT;
     }
 
     private int getSubRegionLabelY()
@@ -507,12 +635,13 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
     {
         int maxWidth = this.getProjectNameFieldBaseWidth();
 
-        if (!this.worldOriginFitsProjectRow())
+        if (!this.coordinateGroupsFitProjectRow())
         {
             return maxWidth;
         }
 
-        int availableRight = this.getScreenWidth() - MARGIN - COORDINATE_GROUP_LEFT_GAP - COORDINATE_GROUP_WIDTH;
+        int availableRight = this.getScreenWidth() - MARGIN -
+                COORDINATE_GROUP_LEFT_GAP - this.getCoordinateGroupsWidth();
         return Math.max(140, Math.min(maxWidth, availableRight - FORM_X));
     }
 
@@ -601,6 +730,12 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
 
     void selectRegion(@Nullable String regionName)
     {
+        if (regionName != null)
+        {
+            LvcSubRegionEditSession.discardManualOriginDraft(
+                    this.repositoryDirectory);
+        }
+
         this.selectedRegionName = regionName;
         LvcTrackingSubRegionSelection.set(this.repositoryDirectory, regionName);
     }
@@ -620,7 +755,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
         CHANGE_SELECTION_MODE("litematica.gui.button.area_editor.change_selection_mode"),
         CHANGE_CORNER_MODE("litematica.gui.button.area_editor.change_corner_mode"),
         NEW_SUB_REGION("gitmatica.gui.button.lvc_project_editor.new_sub_region"),
-        MANUAL_ORIGIN("gitmatica.gui.button.lvc_project_editor.manual_origin"),
+        MANUAL_ORIGIN("gitmatica.gui.button.lvc_project_editor.show_manual_origin"),
         SET_ORIGIN_TO_PLAYER("litematica.gui.button.move_to_player"),
         ANALYZE_AREA("litematica.gui.button.area_editor.analyze_area"),
         PROJECT_MANAGER("gitmatica.gui.button.lvc_project.back_to_manager"),
@@ -647,7 +782,9 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
 
             if (this == MANUAL_ORIGIN)
             {
-                return StringUtils.translate(this.translationKey, StringUtils.translate("malilib.gui.label_colored.off"));
+                return StringUtils.translate(
+                        this.translationKey,
+                        StringUtils.translate("malilib.gui.label_colored.off"));
             }
 
             return StringUtils.translate(this.translationKey);
@@ -675,7 +812,7 @@ public class GuiLvcProjectEditor extends GuiListBase<LvcManifest.Region, WidgetL
                             Configs.Generic.SELECTION_CORNERS_MODE.getOptionListValue().cycle(false));
                     this.gui.initGui();
                 }
-                case MANUAL_ORIGIN -> this.gui.setSavedStatus("gitmatica.message.lvc_project_editor.metadata_locked");
+                case MANUAL_ORIGIN -> this.gui.toggleManualOriginVisibility();
                 case PROJECT_MANAGER -> this.gui.openProjectManager();
                 case LITEMATICA_MENU -> this.gui.openLitematicaMenu();
                 default ->

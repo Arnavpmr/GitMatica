@@ -15,8 +15,11 @@ public record LvcManifest(
         Content content,
         List<Site> sites)
 {
-    public static final String FORMAT = "lvc-manifest-v1";
+    public static final String FORMAT_V1 = "lvc-manifest-v1";
+    public static final String FORMAT_V2 = "lvc-manifest-v2";
+    public static final String FORMAT = FORMAT_V2;
     public static final String CHUNK_FORMAT = LvcContentFormat.CHUNK_FORMAT;
+    public static final List<Integer> ZERO_ORIGIN = List.of(0, 0, 0);
 
     public LvcManifest
     {
@@ -31,7 +34,11 @@ public record LvcManifest(
 
     public LvcManifest validate()
     {
-        requireEquals(FORMAT, this.format, "manifest format");
+        if (!FORMAT_V1.equals(this.format) && !FORMAT_V2.equals(this.format))
+        {
+            throw new IllegalArgumentException("Invalid LVC manifest format: " + this.format);
+        }
+
         requireNotBlank(this.name, "project name");
         requireNotNull(this.content, "content").validate();
         requireNotNull(this.sites, "sites");
@@ -41,6 +48,12 @@ public record LvcManifest(
         for (Site site : this.sites)
         {
             site.validate();
+
+            if (FORMAT_V1.equals(this.format) && !ZERO_ORIGIN.equals(site.manualOrigin()))
+            {
+                throw new IllegalArgumentException(
+                        "LVC v1 sites cannot contain a manual origin: " + site.id());
+            }
 
             if (!siteIds.add(site.id()))
             {
@@ -129,6 +142,18 @@ public record LvcManifest(
         return new LvcManifest(this.format, this.name, this.content, updatedSites).validate();
     }
 
+    public LvcManifest withSiteManualOrigin(String siteId, List<Integer> manualOrigin)
+    {
+        Site updatedSite = this.site(siteId).withManualOrigin(manualOrigin);
+        LvcManifest versionTwo = new LvcManifest(
+                FORMAT_V2,
+                this.name,
+                this.content,
+                this.sites
+        ).validate();
+        return versionTwo.withSite(siteId, updatedSite);
+    }
+
     private static void requireEquals(String expected, String actual, String label)
     {
         if (!Objects.equals(expected, actual))
@@ -206,6 +231,7 @@ public record LvcManifest(
             String name,
             String dimension,
             List<Region> regions,
+            @SerializedName("manual_origin") List<Integer> manualOrigin,
             @SerializedName("hash_index") String hashIndex,
             Map<String, String> fullHashes,
             Map<String, String> trackedHashes)
@@ -214,18 +240,36 @@ public record LvcManifest(
         {
             hashIndex = normalizeHashIndexPath(hashIndex != null ? hashIndex : LvcContentFormat.defaultHashIndexPath(id));
             regions = List.copyOf(Objects.requireNonNull(regions, "regions"));
+            manualOrigin = List.copyOf(Objects.requireNonNull(manualOrigin, "manualOrigin"));
             fullHashes = java.util.Collections.unmodifiableMap(new TreeMap<>(Objects.requireNonNull(fullHashes, "fullHashes")));
             trackedHashes = trackedHashes == null ? Map.of() : java.util.Collections.unmodifiableMap(new TreeMap<>(trackedHashes));
         }
 
+        public Site(String id, String name, String dimension, List<Region> regions,
+                    String hashIndex, Map<String, String> fullHashes,
+                    Map<String, String> trackedHashes)
+        {
+            this(id, name, dimension, regions, ZERO_ORIGIN, hashIndex,
+                    fullHashes, trackedHashes);
+        }
+
         public Site(String id, String name, String dimension, List<Region> regions, Map<String, String> fullHashes)
         {
-            this(id, name, dimension, regions, LvcContentFormat.defaultHashIndexPath(id), fullHashes, fullHashes);
+            this(id, name, dimension, regions, ZERO_ORIGIN,
+                    LvcContentFormat.defaultHashIndexPath(id), fullHashes, fullHashes);
         }
 
         public Site(String id, String name, String dimension, List<Region> regions, String hashIndex, Map<String, String> fullHashes)
         {
-            this(id, name, dimension, regions, hashIndex, fullHashes, fullHashes);
+            this(id, name, dimension, regions, ZERO_ORIGIN,
+                    hashIndex, fullHashes, fullHashes);
+        }
+
+        public Site(String id, String name, String dimension, List<Region> regions,
+                    List<Integer> manualOrigin, Map<String, String> fullHashes)
+        {
+            this(id, name, dimension, regions, manualOrigin,
+                    LvcContentFormat.defaultHashIndexPath(id), fullHashes, fullHashes);
         }
 
         public Site withFullHashes(Map<String, String> fullHashes)
@@ -235,17 +279,26 @@ public record LvcManifest(
 
         public Site withHashRefs(Map<String, String> fullHashes, Map<String, String> trackedHashes)
         {
-            return new Site(this.id, this.name, this.dimension, this.regions, this.hashIndex, fullHashes, trackedHashes);
+            return new Site(this.id, this.name, this.dimension, this.regions,
+                    this.manualOrigin, this.hashIndex, fullHashes, trackedHashes);
         }
 
         public Site withName(String name)
         {
-            return new Site(this.id, name, this.dimension, this.regions, this.hashIndex, this.fullHashes, this.trackedHashes);
+            return new Site(this.id, name, this.dimension, this.regions,
+                    this.manualOrigin, this.hashIndex, this.fullHashes, this.trackedHashes);
         }
 
         public Site withRegions(List<Region> regions)
         {
-            return new Site(this.id, this.name, this.dimension, regions, this.hashIndex, this.fullHashes, this.trackedHashes);
+            return new Site(this.id, this.name, this.dimension, regions,
+                    this.manualOrigin, this.hashIndex, this.fullHashes, this.trackedHashes);
+        }
+
+        public Site withManualOrigin(List<Integer> manualOrigin)
+        {
+            return new Site(this.id, this.name, this.dimension, this.regions,
+                    manualOrigin, this.hashIndex, this.fullHashes, this.trackedHashes);
         }
 
         public Map<String, String> trackedHashesForComparison()
@@ -259,6 +312,7 @@ public record LvcManifest(
             requireNotBlank(this.name, "site name");
             requireNotBlank(this.dimension, "site dimension");
             normalizeHashIndexPath(this.hashIndex);
+            validateVector(this.manualOrigin, "manual origin", false);
 
             Set<String> regionNames = new HashSet<>();
 

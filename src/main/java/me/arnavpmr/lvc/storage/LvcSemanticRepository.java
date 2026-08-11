@@ -250,7 +250,18 @@ public final class LvcSemanticRepository
     public static String trackingOverlayDefinitionId(LvcManifest manifest)
     {
         Objects.requireNonNull(manifest, "manifest");
-        return LvcChunkStore.objectId(LvcManifestJsonCodec.encode(manifest).getBytes(StandardCharsets.UTF_8));
+        List<LvcManifest.Site> sites = manifest.sites().stream()
+                .map(site -> site.withManualOrigin(LvcManifest.ZERO_ORIGIN))
+                .toList();
+        LvcManifest overlayDefinition = new LvcManifest(
+                LvcManifest.FORMAT_V1,
+                manifest.name(),
+                manifest.content(),
+                sites
+        ).validate();
+        return LvcChunkStore.objectId(
+                LvcManifestJsonCodec.encode(overlayDefinition)
+                        .getBytes(StandardCharsets.UTF_8));
     }
 
     public static LvcManifest readCommitManifest(Repository repository, RevCommit commit) throws IOException

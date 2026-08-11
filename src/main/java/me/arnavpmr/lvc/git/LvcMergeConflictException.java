@@ -9,6 +9,7 @@ public class LvcMergeConflictException extends IOException
         UNKNOWN,
         NO_MERGE_BASE,
         MANIFEST_METADATA,
+        MANUAL_ORIGIN,
         SUBREGION,
         SITE_ADD,
         SITE_DELETE,

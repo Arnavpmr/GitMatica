@@ -10,7 +10,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.core.BlockPos;
 
+import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.data.DataManager;
 import fi.dy.masa.litematica.render.OverlayRenderer;
 import fi.dy.masa.litematica.render.OverlayRenderer.BoxType;
@@ -19,6 +21,8 @@ import fi.dy.masa.litematica.schematic.verifier.SchematicVerifier.MismatchType;
 import fi.dy.masa.litematica.selection.Box;
 import fi.dy.masa.malilib.util.data.Color4f;
 import me.arnavpmr.lvc.overlay.LvcBlockInspectionPolicy;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
+import me.arnavpmr.lvc.overlay.LvcManualOriginRenderer;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralBoundsRenderer;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
@@ -30,6 +34,28 @@ abstract class MixinOverlayRenderer
     private void gitmatica$renderStructuralBounds(CallbackInfo callbackInfo)
     {
         LvcSubRegionStructuralBoundsRenderer.render();
+        LvcManualOriginRenderer.render();
+    }
+
+    @Redirect(
+            method = "renderBoxes",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lfi/dy/masa/malilib/render/RenderUtils;renderBlockOutline(Lnet/minecraft/core/BlockPos;FFLfi/dy/masa/malilib/util/data/Color4f;Z)V",
+                    ordinal = 1))
+    private void gitmatica$suppressOverlappingPlacementOrigin(
+            BlockPos position,
+            float expand,
+            float lineWidth,
+            Color4f color,
+            boolean renderThrough)
+    {
+        if (!Configs.Visuals.ENABLE_AREA_SELECTION_RENDERING.getBooleanValue() ||
+                !LvcManualOriginMarkerRegistry.shouldSuppressPlacementOrigin(position))
+        {
+            fi.dy.masa.malilib.render.RenderUtils.renderBlockOutline(
+                    position, expand, lineWidth, color, renderThrough);
+        }
     }
 
     @Inject(method = "renderSelectionBox", at = @At("HEAD"), cancellable = true)

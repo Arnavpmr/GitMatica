@@ -12,6 +12,7 @@
     "gui.widget.MixinWidgetSchematicEntry",
     "gui.widget.MixinWidgetSchematicPlacement",
     "hotkey.MixinKeyCallbackHotkeys",
+    "hotkey.MixinKeyCallbackToggleMessage",
     "inventory.MixinAbstractContainerScreenInventory",
     "inventory.MixinClientPacketListenerInventory",
     "inventory.MixinGuiGraphicsExtractorVerifierInventory",

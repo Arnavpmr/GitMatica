@@ -13,6 +13,7 @@ import fi.dy.masa.malilib.hotkeys.IKeybind;
 import fi.dy.masa.malilib.hotkeys.KeyAction;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.gui.GuiLvcChangeViewer;
+import me.arnavpmr.lvc.gui.GuiLvcProjectEditor;
 import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
 import me.arnavpmr.lvc.integration.litematica.tool.LvcToolModes;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
@@ -27,16 +28,21 @@ abstract class MixinKeyCallbackHotkeys
             CallbackInfoReturnable<Boolean> callbackInfo)
     {
         if (LvcToolModes.isEditProjectActive() &&
-                key == Hotkeys.EXECUTE_OPERATION.getKeybind() &&
-                LvcSubRegionEditSession.applyCurrentBounds())
+                key == Hotkeys.EXECUTE_OPERATION.getKeybind())
         {
-            callbackInfo.setReturnValue(true);
-            return;
+            if (fi.dy.masa.malilib.util.GuiUtils.getCurrentScreen() instanceof
+                    GuiLvcProjectEditor ||
+                    (LvcSubRegionEditSession.canApplyCurrentEdit() &&
+                     LvcSubRegionEditSession.applyCurrentEdit()))
+            {
+                callbackInfo.setReturnValue(true);
+                return;
+            }
         }
 
         if (LvcToolModes.isEditProjectActive() &&
                 key == Hotkeys.TOOL_SELECT_ELEMENTS.getKeybind() &&
-                LvcSubRegionEditSession.selectOtherSubRegionAtCrosshair(200))
+                LvcSubRegionEditSession.selectOtherTargetAtCrosshair(200))
         {
             callbackInfo.setReturnValue(true);
             return;

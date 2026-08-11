@@ -21,9 +21,14 @@ public final class LvcSemanticProjectEditor
     public static LvcProjectEditorState readState(Path repositoryDirectory) throws IOException
     {
         ActiveSemanticProject project = readActiveProject(repositoryDirectory);
+        BlockPos placementOrigin = blockPosFromList(project.placement().origin());
+        BlockPos manualOrigin = addExact(
+                placementOrigin,
+                blockPosFromList(project.site().manualOrigin()));
         return new LvcProjectEditorState(
                 project.manifest().name(),
-                blockPosFromList(project.placement().origin()),
+                placementOrigin,
+                manualOrigin,
                 project.site().regions()
         );
     }
@@ -56,6 +61,26 @@ public final class LvcSemanticProjectEditor
                     "Load the Gitmatica project placement before editing its origin");
         }
 
+        return true;
+    }
+
+    public static boolean updateManualOrigin(
+            Path repositoryDirectory,
+            BlockPos relativeOrigin) throws IOException
+    {
+        Objects.requireNonNull(relativeOrigin, "relativeOrigin");
+        ActiveSemanticProject project = readActiveProject(repositoryDirectory);
+        List<Integer> coordinates = blockPosToList(relativeOrigin);
+
+        if (project.site().manualOrigin().equals(coordinates))
+        {
+            return false;
+        }
+
+        LvcManifest updatedManifest = project.manifest().withSiteManualOrigin(
+                project.siteId(), coordinates);
+        LvcSemanticRepository.writeVersionedProjectFiles(
+                repositoryDirectory, updatedManifest);
         return true;
     }
 
@@ -216,6 +241,21 @@ public final class LvcSemanticProjectEditor
         }
 
         return new BlockPos(values.get(0), values.get(1), values.get(2));
+    }
+
+    private static BlockPos addExact(BlockPos left, BlockPos right)
+    {
+        try
+        {
+            return new BlockPos(
+                    Math.addExact(left.getX(), right.getX()),
+                    Math.addExact(left.getY(), right.getY()),
+                    Math.addExact(left.getZ(), right.getZ()));
+        }
+        catch (ArithmeticException e)
+        {
+            throw new IllegalArgumentException("LVC manual origin exceeds the supported coordinate range", e);
+        }
     }
 
     private record ActiveSemanticProject(LvcManifest manifest, String siteId,

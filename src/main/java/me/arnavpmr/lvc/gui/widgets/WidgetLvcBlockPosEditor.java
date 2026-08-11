@@ -39,18 +39,30 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
     private final ValueListener valueListener;
     private final Runnable invalidValueListener;
     private final Runnable moveToPlayerListener;
+    private final Runnable focusListener;
     private final List<CoordinateField> fields;
     private final ButtonGeneric moveToPlayerButton;
+    private boolean enabled = true;
 
     public WidgetLvcBlockPosEditor(int x, int y, int width, String title, String moveToPlayerLabel,
                                    BlockPos initialValue, ValueListener valueListener,
                                    Runnable invalidValueListener, Runnable moveToPlayerListener)
+    {
+        this(x, y, width, title, moveToPlayerLabel, initialValue, valueListener,
+                invalidValueListener, moveToPlayerListener, () -> {});
+    }
+
+    public WidgetLvcBlockPosEditor(int x, int y, int width, String title, String moveToPlayerLabel,
+                                   BlockPos initialValue, ValueListener valueListener,
+                                   Runnable invalidValueListener, Runnable moveToPlayerListener,
+                                   Runnable focusListener)
     {
         super(x, y, width, DEFAULT_HEIGHT);
         this.title = title;
         this.valueListener = valueListener;
         this.invalidValueListener = invalidValueListener;
         this.moveToPlayerListener = moveToPlayerListener;
+        this.focusListener = focusListener;
         this.fields = List.of(
                 this.createField(Axis.X, 0),
                 this.createField(Axis.Y, 1),
@@ -65,6 +77,23 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
         );
         this.moveToPlayerButton.setActionListener((button, mouseButton) -> this.moveToPlayerListener.run());
         this.setValue(initialValue);
+    }
+
+    public void setEnabled(boolean enabled)
+    {
+        this.enabled = enabled;
+        this.moveToPlayerButton.setEnabled(enabled);
+
+        for (CoordinateField field : this.fields)
+        {
+            field.textField().setEditable(enabled);
+            field.nudgeButton().setEnabled(enabled);
+
+            if (!enabled)
+            {
+                field.wrapper().setFocused(false);
+            }
+        }
     }
 
     public void setValue(BlockPos value)
@@ -101,6 +130,16 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
     @Override
     protected boolean onMouseClickedImpl(MouseButtonEvent click, boolean doubleClick)
     {
+        if (!this.enabled)
+        {
+            return false;
+        }
+
+        if (this.isMouseOver((int) click.x(), (int) click.y()))
+        {
+            this.focusListener.run();
+        }
+
         boolean handled = false;
 
         for (CoordinateField field : this.fields)
@@ -149,6 +188,11 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
     @Override
     protected boolean onKeyTypedImpl(KeyEvent input)
     {
+        if (!this.enabled)
+        {
+            return false;
+        }
+
         for (int index = 0; index < this.fields.size(); index++)
         {
             CoordinateField field = this.fields.get(index);
@@ -176,6 +220,11 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
     @Override
     protected boolean onCharTypedImpl(CharacterEvent input)
     {
+        if (!this.enabled)
+        {
+            return false;
+        }
+
         for (CoordinateField field : this.fields)
         {
             if (field.wrapper().onCharTyped(input))
@@ -191,14 +240,15 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
     public void render(GuiContext ctx, int mouseX, int mouseY, boolean selected)
     {
         super.render(ctx, mouseX, mouseY, selected);
-        this.drawString(ctx, this.x, this.y + TITLE_TEXT_OFFSET, 0xFFFFFFFF,
+        int textColor = this.enabled ? 0xFFFFFFFF : 0xFFAAAAAA;
+        this.drawString(ctx, this.x, this.y + TITLE_TEXT_OFFSET, textColor,
                 LvcGuiText.ellipsizeToWidth(this.title, this.width, this::getStringWidth));
 
         for (int index = 0; index < this.fields.size(); index++)
         {
             CoordinateField field = this.fields.get(index);
             int rowY = this.getFieldRowY(index);
-            this.drawString(ctx, this.x, rowY + 5, 0xFFFFFFFF, field.axis().label());
+            this.drawString(ctx, this.x, rowY + 5, textColor, field.axis().label());
             field.wrapper().draw(ctx, mouseX, mouseY);
             field.nudgeButton().render(ctx, mouseX, mouseY, false);
         }
@@ -244,6 +294,11 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
 
     private boolean updateValueFromFields()
     {
+        if (!this.enabled)
+        {
+            return false;
+        }
+
         BlockPos value = this.parseValue();
 
         if (value == null)
@@ -257,6 +312,11 @@ public class WidgetLvcBlockPosEditor extends WidgetBase
 
     private void nudge(Axis axis, int mouseButton)
     {
+        if (!this.enabled)
+        {
+            return;
+        }
+
         BlockPos value = this.parseValue();
 
         if (value == null)

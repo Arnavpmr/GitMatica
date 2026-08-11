@@ -59,6 +59,7 @@ final class LvcRegionMergeEngine
                 metadataSite.name(),
                 metadataSite.dimension(),
                 mergedRegions,
+                metadataSite.manualOrigin(),
                 metadataSite.hashIndex(),
                 Map.of(),
                 Map.of()

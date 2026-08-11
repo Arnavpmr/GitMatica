@@ -49,6 +49,8 @@ final class LvcMergeIntegrationTest
         IntegrationTestSupport.run("merge branch conflicts when same sub-region bounds change differently", LvcMergeIntegrationTest::mergeBranchConflictsWhenSameSubRegionBoundsChangeDifferently);
         IntegrationTestSupport.run("structural conflict choice still merges block payloads", LvcMergeIntegrationTest::structuralConflictChoiceStillMergesBlockPayloads);
         IntegrationTestSupport.run("merge branch applies one source to every block conflict", LvcMergeIntegrationTest::mergeBranchAppliesOneSourceToEveryBlockConflict);
+        IntegrationTestSupport.run("merge branch keeps a one-sided manual origin change", LvcMergeIntegrationTest::mergeBranchKeepsOneSidedManualOriginChange);
+        IntegrationTestSupport.run("merge branch conflicts when manual origin changes differently", LvcMergeIntegrationTest::mergeBranchConflictsWhenManualOriginChangesDifferently);
     }
 
     private static void mergeBranchFastForwardsCurrentBranch() throws Exception
@@ -416,6 +418,81 @@ final class LvcMergeIntegrationTest
                 "incoming choice should apply to every conflicted sub-region");
     }
 
+    private static void mergeBranchKeepsOneSidedManualOriginChange() throws Exception
+    {
+        Path repoDir = Files.createTempDirectory("lvc-semantic-merge-origin-");
+        FakeWorldReader reader = new FakeWorldReader("minecraft:stone");
+        LvcSemanticRepository.initProject(
+                repoDir, "Semantic Origin Merge", singleLineSite(),
+                placementAt(0, 0, 0), reader, player("OriginInitial"));
+        String branchName = LvcGitBranchOps.createAndCheckoutBranch(
+                repoDir, "feature/move-origin");
+
+        moveManualOriginInWorkingManifest(repoDir, List.of(-4, 70, 8));
+        commitCurrent(repoDir, reader, "OriginFeature", "move manual origin");
+
+        LvcGitBranchOps.checkoutBranchToWorkingTree(
+                repoDir, LvcGitBranchOps.DEFAULT_BRANCH);
+        reader.setBlock(new LvcIntPosition(0, 0, 0), "minecraft:dirt");
+        commitCurrent(repoDir, reader, "OriginMain", "change tracked block");
+
+        LvcBranchMergeResult result = LvcBranchMergeOps.mergeBranch(
+                repoDir, branchName, player("OriginMerger"));
+        LvcManifest merged = LvcSemanticRepository.readManifest(repoDir);
+
+        IntegrationTestSupport.assertEquals(
+                LvcBranchMergeStatus.MERGED, result.status(),
+                "one-sided manual origin should merge with independent content");
+        IntegrationTestSupport.assertEquals(
+                List.of(-4, 70, 8), merged.site("main").manualOrigin(),
+                "merge should retain the incoming manual origin");
+        IntegrationTestSupport.assertEquals(
+                "minecraft:dirt",
+                readOnlyChunk(repoDir).blockStateAtTrackedOrdinal(0),
+                "origin merge should retain the current block change");
+    }
+
+    private static void mergeBranchConflictsWhenManualOriginChangesDifferently()
+            throws Exception
+    {
+        Path repoDir = Files.createTempDirectory(
+                "lvc-semantic-merge-origin-conflict-");
+        FakeWorldReader reader = new FakeWorldReader("minecraft:stone");
+        LvcSemanticRepository.initProject(
+                repoDir, "Semantic Origin Conflict", singleLineSite(),
+                placementAt(0, 0, 0), reader, player("OriginConflictInitial"));
+        String branchName = LvcGitBranchOps.createAndCheckoutBranch(
+                repoDir, "feature/origin-conflict");
+
+        moveManualOriginInWorkingManifest(repoDir, List.of(1, 2, 3));
+        commitCurrent(repoDir, reader, "OriginConflictFeature", "move incoming origin");
+
+        LvcGitBranchOps.checkoutBranchToWorkingTree(
+                repoDir, LvcGitBranchOps.DEFAULT_BRANCH);
+        moveManualOriginInWorkingManifest(repoDir, List.of(4, 5, 6));
+        LvcSemanticRepository.CommitResult mainCommit = commitCurrent(
+                repoDir, reader, "OriginConflictMain", "move current origin");
+
+        try
+        {
+            LvcBranchMergeOps.mergeBranch(
+                    repoDir, branchName, player("OriginConflictMerger"));
+            throw new AssertionError(
+                    "different manual-origin changes should conflict");
+        }
+        catch (LvcMergeConflictException expected)
+        {
+            IntegrationTestSupport.assertEquals(
+                    LvcMergeConflictException.Reason.MANUAL_ORIGIN,
+                    expected.reason(),
+                    "manual-origin conflicts should be typed distinctly");
+        }
+
+        IntegrationTestSupport.assertEquals(
+                mainCommit.commit().getId(), LvcRepository.resolveHead(repoDir),
+                "manual-origin conflict must not move HEAD");
+    }
+
     private static void renameRegionInWorkingManifest(Path repoDir, String oldName, String newName) throws Exception
     {
         LvcManifest manifest = LvcSemanticRepository.readManifest(repoDir);
@@ -453,5 +530,15 @@ final class LvcMergeIntegrationTest
                 .toList();
         LvcSemanticRepository.writeVersionedProjectFiles(repoDir,
                 manifest.withSite("main", site.withRegions(regions)));
+    }
+
+    private static void moveManualOriginInWorkingManifest(
+            Path repoDir,
+            List<Integer> origin) throws Exception
+    {
+        LvcManifest manifest = LvcSemanticRepository.readManifest(repoDir);
+        LvcSemanticRepository.writeVersionedProjectFiles(
+                repoDir,
+                manifest.withSiteManualOrigin("main", origin));
     }
 }

@@ -28,14 +28,22 @@ public final class LvcManifestJsonCodec
         }
 
         List<LvcManifest.Site> sites = new ArrayList<>();
+        boolean versionTwo = LvcManifest.FORMAT_V2.equals(manifest.format());
 
         for (SiteJson site : requireNotNull(manifest.sites(), "sites"))
         {
+            if (versionTwo && site.manualOrigin() == null)
+            {
+                throw new IllegalArgumentException(
+                        "LVC v2 site manual_origin must not be null: " + site.id());
+            }
+
             sites.add(new LvcManifest.Site(
                     site.id(),
                     site.name(),
                     site.dimension(),
                     site.regions(),
+                    versionTwo ? site.manualOrigin() : LvcManifest.ZERO_ORIGIN,
                     site.hashIndex(),
                     Map.of(),
                     Map.of()
@@ -56,7 +64,15 @@ public final class LvcManifestJsonCodec
 
         for (LvcManifest.Site site : manifest.sites())
         {
-            sites.add(new SiteJson(site.id(), site.name(), site.dimension(), site.regions(), site.hashIndex()));
+            sites.add(new SiteJson(
+                    site.id(),
+                    site.name(),
+                    site.dimension(),
+                    site.regions(),
+                    LvcManifest.FORMAT_V2.equals(manifest.format())
+                            ? site.manualOrigin()
+                            : null,
+                    site.hashIndex()));
         }
 
         return GSON.toJson(new ManifestJson(manifest.format(), manifest.name(), sites));
@@ -82,7 +98,9 @@ public final class LvcManifestJsonCodec
     {
     }
 
-    private record SiteJson(String id, String name, String dimension, List<LvcManifest.Region> regions,
+    private record SiteJson(String id, String name, String dimension,
+                            List<LvcManifest.Region> regions,
+                            @SerializedName("manual_origin") List<Integer> manualOrigin,
                             @SerializedName("hash_index") String hashIndex)
     {
     }

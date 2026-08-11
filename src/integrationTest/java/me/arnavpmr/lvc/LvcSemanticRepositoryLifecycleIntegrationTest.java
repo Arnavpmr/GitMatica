@@ -55,7 +55,7 @@ final class LvcSemanticRepositoryLifecycleIntegrationTest
         LvcSemanticRepository.CommitResult result = LvcSemanticRepository.initProject(repoDir, "Semantic Init", singleLineSite(1), placementAt(0, 0, 0), reader, player("SemanticInit"));
 
         IntegrationTestSupport.assertNotNull(result.commit(), "semantic init should create a commit");
-        IntegrationTestSupport.assertFileContains(repoDir.resolve(LvcSemanticRepository.MANIFEST), "\"format\": \"lvc-manifest-v1\"");
+        IntegrationTestSupport.assertFileContains(repoDir.resolve(LvcSemanticRepository.MANIFEST), "\"format\": \"lvc-manifest-v2\"");
         IntegrationTestSupport.assertFileContains(repoDir.resolve(LvcSemanticRepository.MANIFEST), "\"hash_index\"");
         String manifestText = Files.readString(repoDir.resolve(LvcSemanticRepository.MANIFEST));
         IntegrationTestSupport.assertTrue(!manifestText.contains("\"content\""), "lvc.json should not expose internal content settings");

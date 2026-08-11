@@ -83,6 +83,8 @@ final class LvcSemanticManifestIntegrationTest
         IntegrationTestSupport.assertTrue(!json.contains("\"chunk_size\""), "manifest should not expose internal chunk size");
         IntegrationTestSupport.assertTrue(!json.contains("\"hash_index_format\""), "manifest should not expose internal hash index format");
         IntegrationTestSupport.assertTrue(json.contains("\"hash_index\""), "manifest should reference external hash index");
+        IntegrationTestSupport.assertTrue(json.contains("\"manual_origin\""),
+                "v2 manifest should serialize each site's manual origin");
         IntegrationTestSupport.assertTrue(!json.contains("\"full_hashes\""), "manifest should not serialize full hashes");
         IntegrationTestSupport.assertTrue(!json.contains("\"chunks\""), "manifest should not serialize old chunks key");
         IntegrationTestSupport.assertTrue(!json.contains("\"tracked_hashes\""), "manifest should not serialize tracked hashes");
@@ -96,6 +98,11 @@ final class LvcSemanticManifestIntegrationTest
         IntegrationTestSupport.assertEquals("Gold Farm", decodedManifest.name(), "manifest name");
         IntegrationTestSupport.assertEquals(LvcManifest.Content.defaultContent(), decodedManifest.content(), "manifest should hydrate internal content defaults");
         IntegrationTestSupport.assertEquals(2, decodedManifest.sites().size(), "same dimension multi-site manifest should be valid");
+        IntegrationTestSupport.assertEquals(LvcManifest.FORMAT_V2,
+                decodedManifest.format(), "new manifests should use v2");
+        IntegrationTestSupport.assertEquals(LvcManifest.ZERO_ORIGIN,
+                decodedManifest.sites().get(0).manualOrigin(),
+                "new sites should default to a zero manual origin");
         IntegrationTestSupport.assertEquals("indexes/overworld_main.lvcidx", decodedManifest.sites().get(0).hashIndex(), "manifest should round-trip hash index reference");
         IntegrationTestSupport.assertEquals(0, decodedManifest.sites().get(0).fullHashes().size(), "manifest JSON alone should not carry full hashes");
         IntegrationTestSupport.assertEquals(0, decodedManifest.sites().get(0).trackedHashes().size(), "manifest JSON alone should not carry tracked hashes");
@@ -125,6 +132,27 @@ final class LvcSemanticManifestIntegrationTest
         LvcManifest userEditedContentManifest = LvcManifestJsonCodec.decode(userEditedContentJson);
         IntegrationTestSupport.assertEquals(LvcManifest.Content.defaultContent(), userEditedContentManifest.content(), "manifest JSON content block must not override internal content defaults");
         IntegrationTestSupport.assertTrue(!LvcManifestJsonCodec.encode(userEditedContentManifest).contains("\"content\""), "rewritten manifest should drop old content block");
+
+        LvcManifest v1 = new LvcManifest(
+                LvcManifest.FORMAT_V1,
+                manifest.name(),
+                manifest.content(),
+                manifest.sites()
+        ).validate();
+        String v1Json = LvcManifestJsonCodec.encode(v1);
+        IntegrationTestSupport.assertTrue(!v1Json.contains("\"manual_origin\""),
+                "v1 manifests should not serialize manual origin");
+        IntegrationTestSupport.assertEquals(LvcManifest.ZERO_ORIGIN,
+                LvcManifestJsonCodec.decode(v1Json).site("overworld_main").manualOrigin(),
+                "v1 sites should read with an implicit zero manual origin");
+
+        LvcManifest movedOrigin = v1.withSiteManualOrigin(
+                "overworld_main", List.of(-12, 70, 5));
+        IntegrationTestSupport.assertEquals(LvcManifest.FORMAT_V2,
+                movedOrigin.format(), "changing a v1 origin should upgrade to v2");
+        IntegrationTestSupport.assertEquals(List.of(-12, 70, 5),
+                movedOrigin.site("overworld_main").manualOrigin(),
+                "manual origin should preserve signed coordinates");
 
     }
 
@@ -181,6 +209,8 @@ final class LvcSemanticManifestIntegrationTest
                 baseline.site("main").withRegions(List.of(new LvcManifest.Region(
                         "Storage", List.of(1, 2, 3), List.of(7, 8, 9))))
         );
+        LvcManifest movedOrigin = baseline.withSiteManualOrigin(
+                "main", List.of(10, -2, 30));
 
         IntegrationTestSupport.assertTrue(
                 LvcSemanticRepository.sameRegionDefinitions(baseline, contentOnlyChange),
@@ -193,6 +223,15 @@ final class LvcSemanticManifestIntegrationTest
         IntegrationTestSupport.assertTrue(
                 !LvcSemanticRepository.sameRegionDefinitions(baseline, resized),
                 "changing sub-region bounds should require a structural overlay rebuild"
+        );
+        IntegrationTestSupport.assertTrue(
+                LvcSemanticRepository.sameRegionDefinitions(baseline, movedOrigin),
+                "changing manual origin should not require a structural overlay rebuild"
+        );
+        IntegrationTestSupport.assertEquals(
+                LvcSemanticRepository.trackingOverlayDefinitionId(baseline),
+                LvcSemanticRepository.trackingOverlayDefinitionId(movedOrigin),
+                "manual origin should not change tracking overlay identity"
         );
     }
 

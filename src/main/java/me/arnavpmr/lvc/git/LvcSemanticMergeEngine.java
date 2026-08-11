@@ -52,6 +52,7 @@ final class LvcSemanticMergeEngine
                     resolution
             );
             LvcManifest.Site mergedSite = metadataSite
+                    .withManualOrigin(siteMerge.manualOrigin())
                     .withRegions(siteMerge.regions())
                     .withHashRefs(siteMerge.fullHashes(), siteMerge.trackedHashes());
             mergedSites.add(mergedSite);
@@ -59,7 +60,11 @@ final class LvcSemanticMergeEngine
         }
 
         return new LvcSemanticMergeResult(
-                new LvcManifest(metadata.format(), metadata.name(), metadata.content(), mergedSites),
+                new LvcManifest(
+                        mergedFormat(baseManifest, currentManifest, sourceManifest),
+                        metadata.name(),
+                        metadata.content(),
+                        mergedSites),
                 mergedChunks
         );
     }
@@ -109,10 +114,28 @@ final class LvcSemanticMergeEngine
     private static String metadataJson(LvcManifest manifest)
     {
         List<LvcManifest.Site> sites = manifest.sites().stream()
-                .map(site -> site.withRegions(List.of()))
+                .map(site -> site
+                        .withRegions(List.of())
+                        .withManualOrigin(LvcManifest.ZERO_ORIGIN))
                 .toList();
         return LvcManifestJsonCodec.encode(new LvcManifest(
-                manifest.format(), manifest.name(), manifest.content(), sites));
+                LvcManifest.FORMAT_V1,
+                manifest.name(),
+                manifest.content(),
+                sites));
+    }
+
+    private static String mergedFormat(LvcManifest... manifests)
+    {
+        for (LvcManifest manifest : manifests)
+        {
+            if (LvcManifest.FORMAT_V2.equals(manifest.format()))
+            {
+                return LvcManifest.FORMAT_V2;
+            }
+        }
+
+        return LvcManifest.FORMAT_V1;
     }
 
     private static LvcMergeSiteResult mergeSite(
@@ -185,7 +208,8 @@ final class LvcSemanticMergeEngine
                 baseCommit,
                 currentCommit,
                 sourceCommit,
-                metadataSite,
+                metadataSite.withManualOrigin(mergeManualOrigin(
+                        baseSite, currentSite, sourceSite, resolution)),
                 baseSite,
                 currentSite,
                 sourceSite,
@@ -196,8 +220,51 @@ final class LvcSemanticMergeEngine
                 site.fullHashes(),
                 site.trackedHashesForComparison(),
                 regionMerge.mergedChunks(),
-                site.regions()
+                site.regions(),
+                site.manualOrigin()
         );
+    }
+
+    private static List<Integer> mergeManualOrigin(
+            LvcManifest.Site baseSite,
+            LvcManifest.Site currentSite,
+            LvcManifest.Site sourceSite,
+            @Nullable LvcBranchMergeConflictResolution resolution)
+            throws LvcMergeConflictException
+    {
+        List<Integer> base = baseSite.manualOrigin();
+        List<Integer> current = currentSite.manualOrigin();
+        List<Integer> source = sourceSite.manualOrigin();
+
+        if (current.equals(source))
+        {
+            return current;
+        }
+
+        if (current.equals(base))
+        {
+            return source;
+        }
+
+        if (source.equals(base))
+        {
+            return current;
+        }
+
+        if (resolution == null)
+        {
+            throw new LvcMergeConflictException(
+                    LvcMergeConflictException.Reason.MANUAL_ORIGIN,
+                    "LVC manual origin changed differently on both branches: " +
+                            baseSite.id());
+        }
+
+        return switch (resolution)
+        {
+            case BASE -> base;
+            case INCOMING -> source;
+            case YOURS -> current;
+        };
     }
 
     private static LvcMergeSiteResult resolveWholeSite(
@@ -252,18 +319,21 @@ final class LvcSemanticMergeEngine
                 site.fullHashes(),
                 site.trackedHashesForComparison(),
                 0,
-                site.regions()
+                site.regions(),
+                site.manualOrigin()
         );
     }
 
     private static LvcMergeSiteResult emptySite()
     {
-        return new LvcMergeSiteResult(Map.of(), Map.of(), 0, List.of());
+        return new LvcMergeSiteResult(
+                Map.of(), Map.of(), 0, List.of(), LvcManifest.ZERO_ORIGIN);
     }
 
     private static boolean sameSite(LvcManifest.Site currentSite, LvcManifest.Site sourceSite)
     {
-        return Objects.equals(currentSite.regions(), sourceSite.regions()) &&
+        return Objects.equals(currentSite.manualOrigin(), sourceSite.manualOrigin()) &&
+                Objects.equals(currentSite.regions(), sourceSite.regions()) &&
                 Objects.equals(currentSite.fullHashes(), sourceSite.fullHashes()) &&
                 Objects.equals(
                         currentSite.trackedHashesForComparison(),
@@ -291,7 +361,8 @@ record LvcSemanticMergeResult(LvcManifest manifest, int mergedChunks)
 record LvcMergeSiteResult(Map<String, String> fullHashes,
                           Map<String, String> trackedHashes,
                           int mergedChunks,
-                          List<LvcManifest.Region> regions)
+                          List<LvcManifest.Region> regions,
+                          List<Integer> manualOrigin)
 {
 }
 

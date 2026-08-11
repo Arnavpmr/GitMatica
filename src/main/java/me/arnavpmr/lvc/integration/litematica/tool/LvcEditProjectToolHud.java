@@ -3,6 +3,7 @@ package me.arnavpmr.lvc.integration.litematica.tool;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
 
 import fi.dy.masa.litematica.config.Configs;
 import fi.dy.masa.litematica.data.DataManager;
@@ -66,6 +67,35 @@ public final class LvcEditProjectToolHud
                         "litematica.hud.schematic_placement.sub_region_modified");
                 lines.add(String.format("%s: %s%s%s - %s: %s", label, green,
                         subRegionName, reset, modified, subRegionModified ? yes : no));
+            }
+            else
+            {
+                BlockPos manualOrigin =
+                        LvcManualOriginMarkerRegistry.workingWorldOrigin(
+                                placement);
+
+                if (manualOrigin != null)
+                {
+                    String manualPosition = String.format(
+                            "%d, %d, %d",
+                            manualOrigin.getX(),
+                            manualOrigin.getY(),
+                            manualOrigin.getZ());
+                    label = StringUtils.translate(
+                            "gitmatica.hud.manual_origin");
+                    String modified = StringUtils.translate(
+                            "litematica.hud.schematic_placement.sub_region_modified");
+                    lines.add(String.format(
+                            "%s: %s%s%s - %s: %s",
+                            label,
+                            green,
+                            manualPosition,
+                            reset,
+                            modified,
+                            LvcManualOriginMarkerRegistry.isModified(placement)
+                                    ? yes
+                                    : no));
+                }
             }
         }
         else

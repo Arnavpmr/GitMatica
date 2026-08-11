@@ -9,6 +9,7 @@ import fi.dy.masa.malilib.interfaces.IWorldLoadListener;
 import me.arnavpmr.lvc.gui.LvcInterruptedOperationPrompts;
 import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
 import me.arnavpmr.lvc.overlay.LvcPersistedStructuralDiffRestorer;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
 import me.arnavpmr.lvc.overlay.LvcSubRegionStructuralDiffRegistry;
 import me.arnavpmr.lvc.task.LvcTaskRegistry;
 
@@ -24,6 +25,7 @@ final class GitmaticaWorldLoadListener implements IWorldLoadListener
         {
             LvcSubRegionEditSession.clear();
             LvcPersistedStructuralDiffRestorer.clear();
+            LvcManualOriginMarkerRegistry.clear();
             LvcSubRegionStructuralDiffRegistry.clear();
             LvcTaskRegistry.abortActiveOperationForWorldUnload();
         }
