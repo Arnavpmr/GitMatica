@@ -24,13 +24,18 @@ final class LvcTrackingOverlayRegistry
 
     static void put(Path repositoryDirectory, LvcTrackingOverlayEntry entry)
     {
-        ENTRIES.put(key(repositoryDirectory), entry);
+        Path key = key(repositoryDirectory);
+        ENTRIES.put(key, entry);
+        LvcManualOriginMarkerRegistry.track(
+                key, entry.overlay().placement());
     }
 
     @Nullable
     static LvcTrackingOverlayEntry remove(Path repositoryDirectory)
     {
-        return ENTRIES.remove(key(repositoryDirectory));
+        Path key = key(repositoryDirectory);
+        LvcManualOriginMarkerRegistry.remove(key);
+        return ENTRIES.remove(key);
     }
 
     @Nullable

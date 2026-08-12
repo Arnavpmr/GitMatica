@@ -39,6 +39,7 @@ final class GitmaticaWorldLoadListener implements IWorldLoadListener
     {
         if (worldAfter != null)
         {
+            LvcManualOriginMarkerRegistry.refreshAllLoaded();
             LvcInterruptedOperationPrompts.cancelInterruptedNonWorldOperationsOnWorldJoin(minecraft);
         }
     }

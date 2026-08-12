@@ -5,6 +5,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.Level;
 import me.arnavpmr.lvc.LvcDiagnostics;
 import me.arnavpmr.lvc.LvcFriendlyErrors.Operation;
+import me.arnavpmr.lvc.integration.litematica.selection.LvcSubRegionEditSession;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
 import me.arnavpmr.lvc.task.LvcOperationHandle;
 import me.arnavpmr.lvc.task.LvcRemoteServerApplyTask;
 import me.arnavpmr.lvc.task.LvcSemanticClearTask;
@@ -229,6 +231,9 @@ final class LvcAreaWorkflow
     private static void refreshTrackingOverlayAfterDiscard(
             GuiLvcProjectController controller, boolean regionDefinitionsChanged)
     {
+        LvcSubRegionEditSession.discardManualOriginDraft(
+                controller.gui.repositoryDirectory);
+
         if (regionDefinitionsChanged)
         {
             controller.loadTrackingOverlay();
@@ -236,6 +241,8 @@ final class LvcAreaWorkflow
         else
         {
             controller.refreshTrackingOverlayAfterWorldMutation();
+            LvcManualOriginMarkerRegistry.refresh(
+                    controller.gui.repositoryDirectory);
         }
     }
 

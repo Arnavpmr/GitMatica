@@ -2,6 +2,7 @@ package me.arnavpmr.lvc.gui;
 
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlayService;
 import me.arnavpmr.lvc.overlay.LvcTrackingOverlay;
+import me.arnavpmr.lvc.overlay.LvcManualOriginMarkerRegistry;
 import me.arnavpmr.lvc.git.LvcGitRemoteOps;
 import me.arnavpmr.lvc.git.LvcGitHistoryOps;
 import me.arnavpmr.lvc.git.LvcGitBranchOps;
@@ -932,11 +933,13 @@ final class GuiLvcProjectController
 
     void loadTrackingOverlay()
     {
+        LvcManualOriginMarkerRegistry.refresh(this.gui.repositoryDirectory);
         this.scheduleSemanticTrackingOverlay(true, true, null);
     }
 
     private void loadTrackingOverlayAfterSoftLoad(String commitId)
     {
+        LvcManualOriginMarkerRegistry.refresh(this.gui.repositoryDirectory);
         this.scheduleSemanticTrackingOverlay(true, true, commitId);
     }
 

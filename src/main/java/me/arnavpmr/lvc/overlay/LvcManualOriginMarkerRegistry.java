@@ -1,13 +1,11 @@
 package me.arnavpmr.lvc.overlay;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.lib.ObjectId;
@@ -25,9 +23,7 @@ import me.arnavpmr.lvc.storage.LvcSemanticRepository;
 /** Caches working and HEAD manual origins for loaded tracking placements. */
 public final class LvcManualOriginMarkerRegistry
 {
-    private static final int REFRESH_INTERVAL_TICKS = 20;
     private static final Map<Path, CachedMarker> markers = new HashMap<>();
-    private static int ticks;
 
     private LvcManualOriginMarkerRegistry()
     {
@@ -36,25 +32,13 @@ public final class LvcManualOriginMarkerRegistry
     public static synchronized void clear()
     {
         markers.clear();
-        ticks = 0;
     }
 
-    public static synchronized void onClientTick(Minecraft minecraft)
+    public static synchronized void refreshAllLoaded()
     {
-        if (minecraft.level == null)
-        {
-            clear();
-            return;
-        }
-
-        if (++ticks % REFRESH_INTERVAL_TICKS != 0)
-        {
-            return;
-        }
-
+        markers.clear();
         List<SchematicPlacement> live = DataManager.getSchematicPlacementManager()
                 .getAllSchematicsPlacements();
-        markers.entrySet().removeIf(entry -> !live.contains(entry.getValue().placement()));
 
         for (SchematicPlacement placement : live)
         {
@@ -63,7 +47,7 @@ public final class LvcManualOriginMarkerRegistry
             if (repositoryDirectory != null &&
                     LvcConfigs.isManualOriginVisible(repositoryDirectory))
             {
-                inspect(repositoryDirectory, placement, false);
+                inspect(repositoryDirectory, placement);
             }
         }
     }
@@ -74,13 +58,36 @@ public final class LvcManualOriginMarkerRegistry
         SchematicPlacement placement =
                 LvcTrackingOverlayService.findTrackingPlacement(key);
 
-        if (placement == null)
+        if (placement == null ||
+                !LvcConfigs.isManualOriginVisible(repositoryDirectory))
         {
             markers.remove(key);
             return;
         }
 
-        inspect(key, placement, true);
+        inspect(key, placement);
+    }
+
+    static synchronized void track(
+            Path repositoryDirectory,
+            SchematicPlacement placement)
+    {
+        Path key = key(repositoryDirectory);
+        Path placementRepository = repositoryDirectory(placement);
+
+        if (!key.equals(placementRepository) ||
+                !LvcConfigs.isManualOriginVisible(key))
+        {
+            markers.remove(key);
+            return;
+        }
+
+        inspect(key, placement);
+    }
+
+    static synchronized void remove(Path repositoryDirectory)
+    {
+        markers.remove(key(repositoryDirectory));
     }
 
     public static synchronized List<Marker> visibleMarkers()
@@ -148,28 +155,13 @@ public final class LvcManualOriginMarkerRegistry
 
     private static void inspect(
             Path repositoryDirectory,
-            SchematicPlacement placement,
-            boolean force)
+            SchematicPlacement placement)
     {
         Path key = key(repositoryDirectory);
 
         try
         {
             ObjectId head = LvcRepository.resolveHead(key);
-            long modified = Files.getLastModifiedTime(
-                    key.resolve(LvcSemanticRepository.MANIFEST)).toMillis();
-            Fingerprint fingerprint = new Fingerprint(
-                    placement,
-                    head != null ? head.getName() : null,
-                    modified);
-            CachedMarker existing = markers.get(key);
-
-            if (!force && existing != null &&
-                    existing.fingerprint().equals(fingerprint))
-            {
-                return;
-            }
-
             LvcManifest workingManifest = LvcSemanticRepository.readManifest(key);
             String siteId = LvcSemanticRepository.defaultSiteId(workingManifest);
             BlockPos workingOrigin = position(
@@ -178,7 +170,7 @@ public final class LvcManualOriginMarkerRegistry
                     ? readHeadOrigin(key, head, siteId)
                     : null;
             markers.put(key, new CachedMarker(
-                    key, placement, fingerprint, workingOrigin, headOrigin));
+                    key, placement, workingOrigin, headOrigin));
         }
         catch (Exception e)
         {
@@ -280,17 +272,9 @@ public final class LvcManualOriginMarkerRegistry
         }
     }
 
-    private record Fingerprint(
-            SchematicPlacement placement,
-            @Nullable String head,
-            long manifestModified)
-    {
-    }
-
     private record CachedMarker(
             Path repositoryDirectory,
             SchematicPlacement placement,
-            Fingerprint fingerprint,
             BlockPos workingOrigin,
             @Nullable BlockPos headOrigin)
     {
